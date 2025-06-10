@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Export user data
     const userData = await pool.query(
-      `SELECT id, email, name, date_of_birth, gender, location,
+      `SELECT id, email, name, birthdate, gender, location,
               created_at, last_active, subscription_type
        FROM users WHERE id = $1`,
       [user.id]

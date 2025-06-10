@@ -19,8 +19,12 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!isLoading && (!user || !user.is_admin)) {
+    console.log('Admin layout - user:', user, 'isLoading:', isLoading, 'isAdmin:', user?.isAdmin)
+    if (!isLoading && (!user || !user.isAdmin)) {
+      console.log('Redirecting non-admin user to home page. User:', user?.email, 'isAdmin:', user?.isAdmin)
       router.push("/")
+    } else if (!isLoading && user?.isAdmin) {
+      console.log('Admin user confirmed, showing admin dashboard for:', user.email)
     }
   }, [user, isLoading, router])
 
@@ -32,7 +36,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!user || !user.is_admin) {
+  if (!user || !user.isAdmin) {
+    console.log('Admin access denied in layout for user:', user)
     return null
   }
 

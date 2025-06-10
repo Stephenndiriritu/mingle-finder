@@ -1,202 +1,187 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { getUserFromRequest } from "@/lib/auth"
-import { getCachedDiscoverUsers, setCachedDiscoverUsers } from "@/lib/cache"
 
-// Mock data for development
-const mockUsers = [
+// Mock data for testing - formatted to match discover page expectations
+const mockProfiles = [
   {
-    id: 2,
-    name: "Sarah Johnson",
-    date_of_birth: "1995-03-15",
-    gender: "female",
+    id: "1",
+    firstName: "Sarah",
+    lastName: "Johnson",
+    birthDate: "1995-06-15", // Age 28
+    bio: "Love hiking, coffee, and good conversations. Looking for someone genuine to explore life with.",
+    photos: ["/placeholder.svg?height=600&width=400"],
     location: "New York, NY",
-    latitude: 40.7128,
-    longitude: -74.0060,
-    bio: "Adventure seeker and coffee enthusiast. Love hiking and photography.",
-    photos: ["photo1.jpg", "photo2.jpg"],
-    age: 28,
-    height: 165,
-    occupation: "UX Designer",
-    interests: ["hiking", "photography", "travel"],
-    profile_completion_percentage: 95,
-    distance: 5.2,
-    subscription_type: "free"
-  },
-  {
-    id: 3,
-    name: "Michael Chen",
-    date_of_birth: "1993-07-22",
-    gender: "male",
-    location: "San Francisco, CA",
-    latitude: 37.7749,
-    longitude: -122.4194,
-    bio: "Tech enthusiast and foodie. Always up for trying new restaurants.",
-    photos: ["photo3.jpg", "photo4.jpg"],
-    age: 30,
-    height: 180,
     occupation: "Software Engineer",
-    interests: ["coding", "food", "music"],
-    profile_completion_percentage: 90,
-    distance: 3.8,
-    subscription_type: "gold"
+    interests: ["Hiking", "Coffee", "Photography", "Travel", "Books"],
+    subscriptionType: "premium_plus",
+    isVerified: true,
+    profileBoosts: 3,
+    lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    profileViews: 245,
+    likesReceived: 89,
+    responseRate: 0.85,
+    rankingScore: 95
   },
   {
-    id: 4,
-    name: "Emily Davis",
-    date_of_birth: "1996-11-30",
-    gender: "female",
-    location: "Los Angeles, CA",
-    latitude: 34.0522,
-    longitude: -118.2437,
-    bio: "Artist and yoga instructor. Looking for someone to share adventures with.",
-    photos: ["photo5.jpg", "photo6.jpg"],
-    age: 27,
-    height: 170,
+    id: "2",
+    firstName: "Emma",
+    lastName: "Wilson",
+    birthDate: "1998-03-22", // Age 25
+    bio: "Artist and yoga instructor. Passionate about mindfulness and creativity.",
+    photos: ["/placeholder.svg?height=600&width=400"],
+    location: "Brooklyn, NY",
     occupation: "Yoga Instructor",
-    interests: ["art", "yoga", "meditation"],
-    profile_completion_percentage: 85,
-    distance: 7.1,
-    subscription_type: "platinum"
+    interests: ["Yoga", "Art", "Meditation", "Nature", "Music"],
+    subscriptionType: "premium",
+    isVerified: true,
+    profileBoosts: 1,
+    lastActive: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+    profileViews: 178,
+    likesReceived: 67,
+    responseRate: 0.92,
+    rankingScore: 88
+  },
+  {
+    id: "3",
+    firstName: "Jessica",
+    lastName: "Chen",
+    birthDate: "1993-11-08", // Age 30
+    bio: "Foodie and adventure seeker. Always up for trying new restaurants or planning the next trip.",
+    photos: ["/placeholder.svg?height=600&width=400"],
+    location: "Manhattan, NY",
+    occupation: "Marketing Manager",
+    interests: ["Food", "Travel", "Adventure", "Wine", "Cooking"],
+    subscriptionType: "premium",
+    isVerified: false,
+    profileBoosts: 0,
+    lastActive: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+    profileViews: 134,
+    likesReceived: 45,
+    responseRate: 0.78,
+    rankingScore: 75
+  },
+  {
+    id: "4",
+    firstName: "Alex",
+    lastName: "Rodriguez",
+    birthDate: "1992-09-14", // Age 31
+    bio: "Fitness enthusiast and entrepreneur. Love outdoor activities and building meaningful connections.",
+    photos: ["/placeholder.svg?height=600&width=400"],
+    location: "Queens, NY",
+    occupation: "Business Owner",
+    interests: ["Fitness", "Business", "Outdoor Sports", "Technology", "Networking"],
+    subscriptionType: "free",
+    isVerified: false,
+    profileBoosts: 0,
+    lastActive: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    profileViews: 67,
+    likesReceived: 23,
+    responseRate: 0.65,
+    rankingScore: 45
+  },
+  {
+    id: "5",
+    firstName: "Maya",
+    lastName: "Patel",
+    birthDate: "1996-12-03", // Age 27
+    bio: "Doctor and book lover. Passionate about helping others and continuous learning.",
+    photos: ["/placeholder.svg?height=600&width=400"],
+    location: "Manhattan, NY",
+    occupation: "Doctor",
+    interests: ["Medicine", "Reading", "Volunteering", "Classical Music", "Science"],
+    subscriptionType: "free",
+    isVerified: false,
+    profileBoosts: 0,
+    lastActive: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+    profileViews: 89,
+    likesReceived: 34,
+    responseRate: 0.71,
+    rankingScore: 52
   }
 ]
 
-const mockPreferences = {
-  max_distance: 50,
-  age_min: 25,
-  age_max: 35,
-  show_me: "everyone"
+// Ranking algorithm that prioritizes premium users
+function calculateProfileRanking(profile: any): number {
+  let score = 0
+
+  // Subscription tier bonus (highest priority)
+  switch (profile.subscriptionType) {
+    case 'premium_plus':
+      score += 50 // Highest priority
+      break
+    case 'premium':
+      score += 30 // High priority
+      break
+    case 'free':
+      score += 0 // Base priority
+      break
+  }
+
+  // Verification bonus
+  if (profile.isVerified) {
+    score += 15
+  }
+
+  // Profile boosts (premium feature)
+  score += profile.profileBoosts * 5
+
+  // Activity recency (more recent = higher score)
+  const hoursAgo = (Date.now() - new Date(profile.lastActive).getTime()) / (1000 * 60 * 60)
+  if (hoursAgo < 1) score += 10
+  else if (hoursAgo < 6) score += 8
+  else if (hoursAgo < 24) score += 5
+  else if (hoursAgo < 72) score += 2
+
+  // Engagement metrics
+  score += Math.min(profile.profileViews / 10, 10) // Max 10 points from views
+  score += Math.min(profile.likesReceived / 5, 15) // Max 15 points from likes
+  score += profile.responseRate * 10 // Max 10 points from response rate
+
+  return Math.round(score)
 }
 
-export async function GET(request: NextRequest) {
+// Sort profiles by ranking (premium users first)
+function sortProfilesByRanking(profiles: any[]): any[] {
+  return profiles
+    .map(profile => ({
+      ...profile,
+      rankingScore: calculateProfileRanking(profile)
+    }))
+    .sort((a, b) => {
+      // First sort by subscription tier
+      const tierOrder = { 'premium_plus': 3, 'premium': 2, 'free': 1 }
+      const tierDiff = tierOrder[b.subscriptionType as keyof typeof tierOrder] - tierOrder[a.subscriptionType as keyof typeof tierOrder]
+
+      if (tierDiff !== 0) return tierDiff
+
+      // Then by ranking score
+      return b.rankingScore - a.rankingScore
+    })
+}
+
+export async function GET() {
   try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Apply ranking algorithm to prioritize premium users
+    const rankedProfiles = sortProfilesByRanking(mockProfiles)
 
-    const { searchParams } = new URL(request.url)
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const offset = Number.parseInt(searchParams.get("offset") || "0")
+    console.log('Profile ranking applied:')
+    rankedProfiles.forEach(profile => {
+      console.log(`${profile.firstName} (${profile.subscriptionType}): Score ${profile.rankingScore}`)
+    })
 
-    // Try to get cached results first
-    const cachedUsers = await getCachedDiscoverUsers(user.id)
-    if (cachedUsers.length > offset) {
-      return NextResponse.json({ 
-        users: cachedUsers.slice(offset, offset + limit),
-        fromCache: true 
-      })
-    }
-
-    try {
-      // Get user's preferences and location in a single query
-      const userDataResult = await pool.query(
-        `SELECT p.max_distance, p.age_min, p.age_max, p.show_me, u.latitude, u.longitude
-         FROM profiles p
-         JOIN users u ON p.user_id = u.id
-         WHERE p.user_id = $1`,
-        [user.id]
-      )
-
-      if (userDataResult.rows.length === 0) {
-        return NextResponse.json({ error: "Profile not found" }, { status: 404 })
+    return NextResponse.json({
+      profiles: rankedProfiles,
+      success: true,
+      ranking: {
+        algorithm: "premium_priority",
+        description: "Premium and Premium Plus users are shown first, followed by engagement metrics"
       }
-
-      const preferences = userDataResult.rows[0]
-      const userLocation = {
-        latitude: preferences.latitude,
-        longitude: preferences.longitude
-      }
-
-      // Materialized CTE for better performance
-      const query = `
-        WITH filtered_users AS MATERIALIZED (
-          SELECT DISTINCT 
-            u.id, u.name, u.date_of_birth, u.gender, u.location, u.latitude, u.longitude,
-            p.bio, p.photos, p.age, p.height, p.occupation, p.interests,
-            p.profile_completion_percentage,
-            CASE 
-              WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL AND $4 IS NOT NULL AND $5 IS NOT NULL
-              THEN calculate_distance($4, $5, u.latitude, u.longitude)
-              ELSE NULL
-            END as distance,
-            CASE 
-              WHEN u.subscription_type IN ('gold', 'platinum') THEN 1 
-              ELSE 0 
-            END as is_premium
-          FROM users u
-          JOIN profiles p ON u.id = p.user_id
-          WHERE u.id != $1
-            AND u.is_active = true
-            AND u.id NOT IN (
-              SELECT swiped_id FROM swipes WHERE swiper_id = $1
-            )
-            AND u.id NOT IN (
-              SELECT blocked_id FROM blocks WHERE blocker_id = $1
-              UNION
-              SELECT blocker_id FROM blocks WHERE blocked_id = $1
-            )
-            AND p.age BETWEEN $2 AND $3
-            AND (
-              $6 = 'everyone' OR 
-              ($6 = 'male' AND u.gender = 'male') OR
-              ($6 = 'female' AND u.gender = 'female')
-            )
-            AND (
-              u.latitude IS NULL OR u.longitude IS NULL OR $4 IS NULL OR $5 IS NULL OR
-              calculate_distance($4, $5, u.latitude, u.longitude) <= $7
-            )
-        )
-        SELECT *
-        FROM filtered_users
-        ORDER BY 
-          is_premium DESC,
-          profile_completion_percentage DESC,
-          distance ASC NULLS LAST,
-          last_active DESC,
-          RANDOM()
-        LIMIT $8 OFFSET $9
-      `
-
-      const queryParams = [
-        user.id,
-        preferences.age_min,
-        preferences.age_max,
-        userLocation.latitude,
-        userLocation.longitude,
-        preferences.show_me,
-        preferences.max_distance,
-        limit,
-        offset
-      ]
-
-      const result = await pool.query(query, queryParams)
-      const users = result.rows
-
-      // Cache the results
-      if (offset === 0) {
-        await setCachedDiscoverUsers(user.id, users)
-      }
-
-      return NextResponse.json({ users })
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      
-      if (process.env.NODE_ENV === "development") {
-        // Development mock data handling
-        return NextResponse.json({ 
-          users: mockUsers.slice(offset, offset + limit),
-          _mock: true
-        })
-      }
-      
-      throw dbError
-    }
+    })
   } catch (error) {
-    console.error("Discover error:", error)
-    return NextResponse.json({ 
-      error: "Failed to fetch discover users",
-      details: process.env.NODE_ENV === "development" ? String(error) : undefined
-    }, { status: 500 })
+    console.error("Failed to fetch profiles:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }

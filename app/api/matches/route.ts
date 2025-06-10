@@ -1,25 +1,26 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { getUserFromRequest } from "@/lib/auth"
 
-// Mock matches for development
-const mockMatches = [
+// Mock matches for development - supporting both formats
+const mockMatchesForMessages = [
   {
     match_id: 1,
     matched_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     user: {
       id: 2,
       name: "Sarah Johnson",
-      photos: ["photo1.jpg"],
+      photos: ["/placeholder.svg?height=400&width=400"],
       last_active: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
       is_online: true
     },
     last_message: {
       id: 1,
-      content: "Hey! How are you?",
-      sent_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-      is_read: false
-    }
+      message: "Hey! How are you?",
+      created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      is_read: false,
+      sender_id: 2
+    },
+    unread_count: 1
   },
   {
     match_id: 2,
@@ -27,16 +28,18 @@ const mockMatches = [
     user: {
       id: 3,
       name: "Michael Chen",
-      photos: ["photo3.jpg"],
+      photos: ["/placeholder.svg?height=400&width=400"],
       last_active: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       is_online: false
     },
     last_message: {
       id: 2,
-      content: "Would you like to grab coffee sometime?",
-      sent_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      is_read: true
-    }
+      message: "Would you like to grab coffee sometime?",
+      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+      is_read: true,
+      sender_id: 3
+    },
+    unread_count: 0
   },
   {
     match_id: 3,
@@ -44,84 +47,75 @@ const mockMatches = [
     user: {
       id: 4,
       name: "Emily Davis",
-      photos: ["photo5.jpg"],
+      photos: ["/placeholder.svg?height=400&width=400"],
       last_active: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
       is_online: true
     },
-    last_message: null
+    last_message: null,
+    unread_count: 0
   }
 ]
 
-export async function GET(request: NextRequest) {
+// Mock matches for the matches page (different format)
+const mockMatchesForPage = [
+  {
+    id: "1",
+    userId: "2",
+    firstName: "Sarah",
+    lastName: "Johnson",
+    photos: ["/placeholder.svg?height=400&width=400"],
+    birthDate: "1995-06-15",
+    occupation: "Software Engineer",
+    location: "New York, NY",
+    lastActive: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    unreadMessages: 1
+  },
+  {
+    id: "2",
+    userId: "3",
+    firstName: "Michael",
+    lastName: "Chen",
+    photos: ["/placeholder.svg?height=400&width=400"],
+    birthDate: "1992-03-22",
+    occupation: "Designer",
+    location: "Brooklyn, NY",
+    lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    unreadMessages: 0
+  },
+  {
+    id: "3",
+    userId: "4",
+    firstName: "Emily",
+    lastName: "Davis",
+    photos: ["/placeholder.svg?height=400&width=400"],
+    birthDate: "1997-11-08",
+    occupation: "Marketing Manager",
+    location: "Manhattan, NY",
+    lastActive: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    unreadMessages: 0
+  }
+]
+
+export async function GET(request: Request) {
   try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // For now, return mock data for testing
+    // TODO: Add proper authentication and real data later
 
     const { searchParams } = new URL(request.url)
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const offset = Number.parseInt(searchParams.get("offset") || "0")
+    const withMessages = searchParams.get('with_messages') === 'true'
 
-    try {
-      const matchesResult = await pool.query(
-        `SELECT 
-          m.id as match_id,
-          m.created_at as matched_at,
-          u.id,
-          u.name,
-          u.photos,
-          u.last_active,
-          (EXTRACT(EPOCH FROM (NOW() - u.last_active)) < 300) as is_online,
-          (
-            SELECT json_build_object(
-              'id', msg.id,
-              'content', msg.content,
-              'sent_at', msg.created_at,
-              'is_read', msg.is_read
-            )
-            FROM messages msg
-            WHERE (msg.sender_id = u.id AND msg.receiver_id = $1)
-               OR (msg.sender_id = $1 AND msg.receiver_id = u.id)
-            ORDER BY msg.created_at DESC
-            LIMIT 1
-          ) as last_message
-        FROM matches m
-        JOIN users u ON (m.user1_id = u.id AND m.user2_id = $1)
-                    OR (m.user2_id = u.id AND m.user1_id = $1)
-        ORDER BY 
-          COALESCE((
-            SELECT created_at 
-            FROM messages 
-            WHERE (sender_id = u.id AND receiver_id = $1)
-               OR (sender_id = $1 AND receiver_id = u.id)
-            ORDER BY created_at DESC
-            LIMIT 1
-          ), m.created_at) DESC
-        LIMIT $2 OFFSET $3`,
-        [user.id, limit, offset]
-      )
+    // Return different format based on what's requested
+    const matches = withMessages ? mockMatchesForMessages : mockMatchesForPage
 
-      return NextResponse.json({ matches: matchesResult.rows })
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      
-      // Use mock data in development
-      if (process.env.NODE_ENV === "development") {
-        const paginatedMatches = mockMatches.slice(offset, offset + limit)
-        return NextResponse.json({ 
-          matches: paginatedMatches,
-          _mock: true
-        })
-      }
-      
-      throw dbError
-    }
+    return NextResponse.json({
+      matches,
+      success: true
+    })
   } catch (error) {
-    console.error("Get matches error:", error)
-    return NextResponse.json({ 
-      error: "Failed to fetch matches. Please try again later.",
-      details: process.env.NODE_ENV === "development" ? error.message : undefined
-    }, { status: 500 })
+    console.error("Failed to fetch matches:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }

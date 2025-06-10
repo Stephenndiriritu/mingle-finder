@@ -10,7 +10,7 @@ import { useAuth } from "@/components/auth-provider"
 import { cn } from "@/lib/utils"
 
 interface User {
-  id: number
+  id: string
   name: string
   age: number
   bio: string
@@ -42,7 +42,18 @@ export default function DiscoverPage() {
       const response = await fetch("/api/discover")
       if (response.ok) {
         const data = await response.json()
-        setUsers(data.users)
+        // Transform API data to match frontend expectations
+        const transformedUsers = (data.profiles || []).map((profile: any) => ({
+          id: profile.id,
+          name: `${profile.firstName} ${profile.lastName}`,
+          age: new Date().getFullYear() - new Date(profile.birthDate).getFullYear(),
+          bio: profile.bio,
+          photos: profile.photos || [],
+          location: profile.location,
+          occupation: profile.occupation,
+          interests: profile.interests || []
+        }))
+        setUsers(transformedUsers)
       } else {
         throw new Error("Failed to fetch users")
       }
@@ -147,7 +158,7 @@ export default function DiscoverPage() {
       <Card className="relative overflow-hidden swipe-card">
         <div className="relative">
           <img
-            src={currentUser.photos[0] || "/placeholder.svg?height=600&width=400"}
+            src={currentUser.photos?.[0] || "/placeholder.svg?height=600&width=400"}
             alt={currentUser.name}
             className="w-full h-96 object-cover"
           />
@@ -189,7 +200,7 @@ export default function DiscoverPage() {
         <CardContent className="p-6">
           {currentUser.bio && <p className="text-gray-700 mb-4">{currentUser.bio}</p>}
 
-          {currentUser.interests && currentUser.interests.length > 0 && (
+          {currentUser.interests && Array.isArray(currentUser.interests) && currentUser.interests.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-semibold text-gray-900">Interests</h3>
               <div className="flex flex-wrap gap-2">

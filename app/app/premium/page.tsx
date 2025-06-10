@@ -11,6 +11,23 @@ import { useRouter } from "next/navigation"
 
 const plans = [
   {
+    id: "free_premium",
+    name: "Free Premium",
+    price: "$0",
+    period: "forever",
+    color: "from-gray-400 to-gray-600",
+    features: [
+      "50 likes per day",
+      "3 super likes per day",
+      "2 rewinds per day",
+      "See who liked you",
+      "Advanced filters",
+      "No messaging capability",
+      "Basic customer support",
+    ],
+    popular: false,
+  },
+  {
     id: "gold",
     name: "Gold",
     price: "$9.99",
@@ -23,6 +40,7 @@ const plans = [
       "1 boost per month",
       "See who liked you",
       "Read receipts",
+      "Unlimited messaging",
       "No ads",
       "Priority customer support",
     ],

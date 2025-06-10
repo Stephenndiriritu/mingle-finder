@@ -3,6 +3,30 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Drop existing tables in reverse order of dependencies
+DROP TABLE IF EXISTS ad_clicks CASCADE;
+DROP TABLE IF EXISTS ad_impressions CASCADE;
+DROP TABLE IF EXISTS advertisements CASCADE;
+DROP TABLE IF EXISTS event_attendees CASCADE;
+DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS gift_transactions CASCADE;
+DROP TABLE IF EXISTS gifts CASCADE;
+DROP TABLE IF EXISTS feedback CASCADE;
+DROP TABLE IF EXISTS photo_verifications CASCADE;
+DROP TABLE IF EXISTS user_preferences CASCADE;
+DROP TABLE IF EXISTS user_activities CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS matches CASCADE;
+DROP TABLE IF EXISTS swipes CASCADE;
+DROP TABLE IF EXISTS subscriptions CASCADE;
+DROP TABLE IF EXISTS blocks CASCADE;
+DROP TABLE IF EXISTS reports CASCADE;
+DROP TABLE IF EXISTS boosts CASCADE;
+DROP TABLE IF EXISTS super_likes CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -13,6 +37,8 @@ CREATE TABLE IF NOT EXISTS users (
   gender VARCHAR(50),
   birthdate DATE,
   location VARCHAR(255),
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
   profile_image_url VARCHAR(255),
   subscription_type VARCHAR(50) DEFAULT 'free',
   subscription_expires_at TIMESTAMP,
@@ -20,6 +46,8 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   is_verified BOOLEAN DEFAULT FALSE,
+  is_admin BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
   verification_token VARCHAR(255),
   reset_token VARCHAR(255),
   reset_token_expires_at TIMESTAMP
@@ -27,8 +55,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Profiles table
 CREATE TABLE profiles (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   bio TEXT,
   interests TEXT[],
   photos TEXT[],
@@ -82,9 +110,9 @@ CREATE TABLE profiles (
 
 -- Swipes table
 CREATE TABLE swipes (
-  id SERIAL PRIMARY KEY,
-  swiper_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  swiped_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  swiper_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  swiped_id UUID REFERENCES users(id) ON DELETE CASCADE,
   is_like BOOLEAN NOT NULL,
   is_super_like BOOLEAN DEFAULT false,
   is_boost_swipe BOOLEAN DEFAULT false,
@@ -95,9 +123,9 @@ CREATE TABLE swipes (
 
 -- Matches table
 CREATE TABLE matches (
-  id SERIAL PRIMARY KEY,
-  user1_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  user2_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user1_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user2_id UUID REFERENCES users(id) ON DELETE CASCADE,
   is_active BOOLEAN DEFAULT true,
   compatibility_score INTEGER DEFAULT 0,
   last_message_at TIMESTAMP,
@@ -108,10 +136,10 @@ CREATE TABLE matches (
 
 -- Messages table
 CREATE TABLE messages (
-  id SERIAL PRIMARY KEY,
-  match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
-  sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
   message TEXT NOT NULL,
   message_type VARCHAR(20) DEFAULT 'text',
   media_url TEXT,
@@ -119,7 +147,7 @@ CREATE TABLE messages (
   is_read BOOLEAN DEFAULT false,
   is_deleted BOOLEAN DEFAULT false,
   is_edited BOOLEAN DEFAULT false,
-  reply_to_id INTEGER REFERENCES messages(id),
+  reply_to_id UUID REFERENCES messages(id),
   read_at TIMESTAMP,
   delivered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -128,9 +156,9 @@ CREATE TABLE messages (
 
 -- Reports table
 CREATE TABLE reports (
-  id SERIAL PRIMARY KEY,
-  reporter_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  reported_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  reported_id UUID REFERENCES users(id) ON DELETE CASCADE,
   report_type VARCHAR(50) NOT NULL,
   reason VARCHAR(100) NOT NULL,
   description TEXT,
@@ -138,16 +166,16 @@ CREATE TABLE reports (
   status VARCHAR(20) DEFAULT 'pending',
   priority VARCHAR(10) DEFAULT 'medium',
   admin_notes TEXT,
-  resolved_by INTEGER REFERENCES users(id),
+  resolved_by UUID REFERENCES users(id),
   resolved_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Blocks table
 CREATE TABLE blocks (
-  id SERIAL PRIMARY KEY,
-  blocker_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  blocked_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  blocker_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id UUID REFERENCES users(id) ON DELETE CASCADE,
   reason VARCHAR(100),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(blocker_id, blocked_id)
@@ -155,8 +183,8 @@ CREATE TABLE blocks (
 
 -- Subscriptions table
 CREATE TABLE subscriptions (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   plan_type VARCHAR(20) NOT NULL,
   status VARCHAR(20) DEFAULT 'active',
   stripe_subscription_id VARCHAR(255),
@@ -176,8 +204,8 @@ CREATE TABLE subscriptions (
 
 -- Boosts table
 CREATE TABLE boosts (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   boost_type VARCHAR(20) NOT NULL,
   duration_minutes INTEGER NOT NULL,
   started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -189,8 +217,8 @@ CREATE TABLE boosts (
 
 -- Super likes table
 CREATE TABLE super_likes (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   used_count INTEGER DEFAULT 0,
   reset_date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -198,7 +226,7 @@ CREATE TABLE super_likes (
 
 -- Advertisements table
 CREATE TABLE advertisements (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title VARCHAR(255) NOT NULL,
   description TEXT,
   image_url TEXT,
@@ -216,16 +244,16 @@ CREATE TABLE advertisements (
   is_active BOOLEAN DEFAULT true,
   start_date TIMESTAMP,
   end_date TIMESTAMP,
-  created_by INTEGER REFERENCES users(id),
+  created_by UUID REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Ad impressions table
 CREATE TABLE ad_impressions (
-  id SERIAL PRIMARY KEY,
-  ad_id INTEGER REFERENCES advertisements(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ad_id UUID REFERENCES advertisements(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   ip_address INET,
   user_agent TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -233,9 +261,9 @@ CREATE TABLE ad_impressions (
 
 -- Ad clicks table
 CREATE TABLE ad_clicks (
-  id SERIAL PRIMARY KEY,
-  ad_id INTEGER REFERENCES advertisements(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ad_id UUID REFERENCES advertisements(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   ip_address INET,
   user_agent TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -243,8 +271,8 @@ CREATE TABLE ad_clicks (
 
 -- Notifications table
 CREATE TABLE notifications (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL,
   title VARCHAR(255) NOT NULL,
   message TEXT NOT NULL,
@@ -258,8 +286,8 @@ CREATE TABLE notifications (
 
 -- User preferences table
 CREATE TABLE user_preferences (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   push_notifications BOOLEAN DEFAULT true,
   email_notifications BOOLEAN DEFAULT true,
   match_notifications BOOLEAN DEFAULT true,
@@ -284,12 +312,12 @@ CREATE TABLE user_preferences (
 
 -- Photo verification table
 CREATE TABLE photo_verifications (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   photo_url TEXT NOT NULL,
   verification_status VARCHAR(20) DEFAULT 'pending',
   verification_type VARCHAR(20) DEFAULT 'manual',
-  verified_by INTEGER REFERENCES users(id),
+  verified_by UUID REFERENCES users(id),
   verified_at TIMESTAMP,
   rejection_reason TEXT,
   confidence_score DECIMAL(5, 2),
@@ -298,8 +326,8 @@ CREATE TABLE photo_verifications (
 
 -- User activities table
 CREATE TABLE user_activities (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   activity_type VARCHAR(50) NOT NULL,
   activity_data JSONB,
   ip_address INET,
@@ -311,22 +339,22 @@ CREATE TABLE user_activities (
 
 -- Feedback table
 CREATE TABLE feedback (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(30) NOT NULL,
   subject VARCHAR(255),
   message TEXT NOT NULL,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   status VARCHAR(20) DEFAULT 'open',
   response TEXT,
-  responded_by INTEGER REFERENCES users(id),
+  responded_by UUID REFERENCES users(id),
   responded_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Events table
 CREATE TABLE events (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title VARCHAR(255) NOT NULL,
   description TEXT,
   event_type VARCHAR(30),
@@ -339,16 +367,16 @@ CREATE TABLE events (
   current_attendees INTEGER DEFAULT 0,
   price DECIMAL(10, 2) DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
-  created_by INTEGER REFERENCES users(id),
+  created_by UUID REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Event attendees table
 CREATE TABLE event_attendees (
-  id SERIAL PRIMARY KEY,
-  event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   status VARCHAR(20) DEFAULT 'attending',
   registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(event_id, user_id)
@@ -356,7 +384,7 @@ CREATE TABLE event_attendees (
 
 -- Gifts table
 CREATE TABLE gifts (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(100) NOT NULL,
   description TEXT,
   image_url TEXT,
@@ -368,10 +396,10 @@ CREATE TABLE gifts (
 
 -- Gift transactions table
 CREATE TABLE gift_transactions (
-  id SERIAL PRIMARY KEY,
-  gift_id INTEGER REFERENCES gifts(id),
-  sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  gift_id UUID REFERENCES gifts(id),
+  sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
   message TEXT,
   amount DECIMAL(10, 2),
   status VARCHAR(20) DEFAULT 'sent',
@@ -519,11 +547,12 @@ CREATE TRIGGER trigger_update_profiles_timestamp
     EXECUTE FUNCTION update_last_active();
 
 -- Insert default admin user (password: admin123)
-INSERT INTO users (email, password_hash, name, is_verified, verification_token) 
+INSERT INTO users (email, password_hash, name, is_verified, is_admin, verification_token) 
 VALUES (
     'admin@minglefinder.com', 
     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm',
     'Admin User', 
+    true,
     true,
     'admin_verification_token'
 );
@@ -538,7 +567,7 @@ INSERT INTO user_preferences (user_id)
 SELECT id FROM users WHERE email = 'admin@minglefinder.com';
 
 -- Sample data for testing (password for all: password123)
-INSERT INTO users (email, password_hash, name, date_of_birth, gender, location, latitude, longitude) VALUES
+INSERT INTO users (email, password_hash, name, birthdate, gender, location, latitude, longitude) VALUES
 ('john@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 'John Doe', '1990-05-15', 'male', 'New York, NY', 40.7128, -74.0060),
 ('jane@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 'Jane Smith', '1992-08-22', 'female', 'Los Angeles, CA', 34.0522, -118.2437),
 ('mike@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 'Mike Johnson', '1988-12-03', 'male', 'Chicago, IL', 41.8781, -87.6298),

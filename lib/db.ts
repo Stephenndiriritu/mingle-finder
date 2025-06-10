@@ -1,96 +1,88 @@
-import { Pool } from "pg"
+import { Pool, PoolClient } from 'pg'
 
-function validateDatabaseUrl(url: string | undefined): string {
-  if (!url) {
-    throw new Error("DATABASE_URL environment variable is not set")
-  }
-  return url
+// Declare global types to extend the NodeJS global object
+declare global {
+  var pgPool: Pool | undefined
 }
 
-// Pool configuration
-const POOL_CONFIG = {
-  max: Number.parseInt(process.env.DB_MAX_CONNECTIONS || "20"),
-  min: Number.parseInt(process.env.DB_MIN_CONNECTIONS || "2"),
-  idleTimeoutMillis: Number.parseInt(process.env.DB_IDLE_TIMEOUT || "30000"),
-  connectionTimeoutMillis: 2000,
-  statement_timeout: 10000, // 10 seconds
-  query_timeout: 5000, // 5 seconds
-  application_name: "minglefinder",
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10000
-}
+// Define a more specific type for the error handler
+type PoolErrorHandler = (err: Error) => void;
 
 let pool: Pool
 
-try {
-  const databaseUrl = validateDatabaseUrl(process.env.DATABASE_URL)
-  
+// Create a new pool if one doesn't exist
+if (!global.pgPool) {
+  // Use environment variable or fallback to default connection string
+  const connectionString = process.env.DATABASE_URL || "postgres://postgres:1234@localhost:5432/minglefinder"
+
+  // Create a real pool
   pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
-    ...POOL_CONFIG
+    connectionString,
+    ssl: process.env.NODE_ENV === 'production' 
+      ? { rejectUnauthorized: false }
+      : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
   })
 
-  // Event listeners for pool management
-  pool.on("connect", (client: import("pg").PoolClient) => {
-    client.query(`SET application_name = '${POOL_CONFIG.application_name}'`)
-    console.log("✅ New database connection established")
-  })
+  // Log when a new pool is created
+  console.log('DB pool connection created')
 
-  pool.on("acquire", () => {
-    console.debug("🔄 Connection acquired from pool")
-  })
+  // Add error handler with explicit type casting
+  pool.on('error', ((err: Error) => {
+    console.error('Unexpected error on idle client', err)
+  }) as PoolErrorHandler)
 
-  pool.on("remove", () => {
-    console.debug("🔄 Connection removed from pool")
-  })
+  // Store in global object
+  global.pgPool = pool
+} else {
+  // Reuse existing pool
+  pool = global.pgPool
+}
 
-  pool.on("error", (err: Error) => {
-    console.error("❌ Database pool error:", err)
-  })
+export default pool
 
-  // Graceful shutdown
-  process.on("SIGTERM", () => {
-    console.log("🛑 Closing database pool...")
-    pool.end().then(() => {
-      console.log("✅ Database pool closed")
-      process.exit(0)
-    })
-  })
-
-} catch (error) {
-  console.error("❌ Failed to create database pool:", error)
-  
-  if (process.env.NODE_ENV === "development") {
-    pool = {
-      query: async (text: string, params?: any[]) => {
-        console.log("🔧 Mock database query:", { text, params })
-        return { rows: [], rowCount: 0 }
-      },
-      connect: async () => ({
-        query: async () => ({ rows: [], rowCount: 0 }),
-        release: () => {},
-      }),
-    } as any
-  } else {
-    throw new Error("Database connection failed. Please check your configuration.")
+// Export async database functions
+export async function query(text: string, params?: any[]) {
+  const start = Date.now()
+  try {
+    const result = await pool.query(text, params)
+    const duration = Date.now() - start
+    
+    if (process.env.NODE_ENV === 'development' && duration > 100) {
+      console.log(`Slow query (${duration}ms): ${text}`)
+    }
+    
+    return result
+  } catch (error: unknown) {
+    console.error('Database query error:', error)
+    throw error
   }
 }
 
-// Helper function for transactions
-export async function withTransaction<T>(callback: (client: import("pg").PoolClient) => Promise<T>): Promise<T> {
+export async function getClient(): Promise<PoolClient> {
   const client = await pool.connect()
+  return client
+}
+
+export async function transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect()
+  
   try {
     await client.query('BEGIN')
     const result = await callback(client)
     await client.query('COMMIT')
     return result
-  } catch (e) {
+  } catch (error: unknown) {
     await client.query('ROLLBACK')
-    throw e
+    throw error
   } finally {
     client.release()
   }
 }
 
-export default pool
+
+
+
+

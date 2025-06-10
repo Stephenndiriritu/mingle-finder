@@ -1,32 +1,35 @@
 "use client"
 
-import type React from "react"
-
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface User {
-  id: number
+  id: string
   email: string
   name: string
-  is_admin: boolean
-  subscription_type?: string
-  is_verified?: boolean
+  isAdmin: boolean
+  subscriptionType?: string
+  isVerified?: boolean
 }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
-  logout: () => void
+  logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isLoading: true,
+  logout: async () => {},
+  refreshUser: async () => {}
+})
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
@@ -37,56 +40,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  const checkAuth = async () => {
-    try {
-      const response = await fetch("/api/auth/me")
-      if (response.ok) {
-        const userData = await response.json()
-        setUser(userData.user)
-      } else {
-        setUser(null)
-        router.push("/")
+  useEffect(() => {
+    // Check for stored user session
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch (error) {
+        console.error('Failed to parse stored user:', error)
+        localStorage.removeItem('user')
       }
-    } catch (error) {
-      console.error("Auth check failed:", error)
-      setUser(null)
-      router.push("/")
-    } finally {
-      setIsLoading(false)
     }
-  }
+    setIsLoading(false)
+  }, [])
 
   const logout = async () => {
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      })
-
-      if (!response.ok) {
-        throw new Error(`Logout failed: ${response.status}`)
-      }
-
+      localStorage.removeItem('user')
       setUser(null)
       router.push("/")
     } catch (error) {
       console.error("Logout failed:", error)
-      setUser(null)
       router.push("/")
     }
   }
 
   const refreshUser = async () => {
-    await checkAuth()
+    // For now, just check localStorage
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser))
+      } catch (error) {
+        console.error('Failed to parse stored user:', error)
+        localStorage.removeItem('user')
+        setUser(null)
+      }
+    }
   }
 
-  useEffect(() => {
-    checkAuth()
-  }, [])
-
+  // Show loading state only during initial load
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -95,5 +88,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <AuthContext.Provider value={{ user, isLoading, logout, refreshUser }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        logout,
+        refreshUser
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }

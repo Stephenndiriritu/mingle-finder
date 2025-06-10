@@ -1,6 +1,8 @@
+'use client'
+
 import { useEffect, useRef, useCallback } from "react"
-import { io, Socket } from "socket.io-client"
-import { useSession } from "next-auth/react"
+import io, { Socket } from "socket.io-client"
+import { useAuth } from "@/components/auth-provider"
 
 interface Message {
   matchId: string
@@ -14,28 +16,20 @@ interface TypingData {
 }
 
 export function useSocket() {
-  const socketRef = useRef<Socket | null>(null)
-  const { data: session } = useSession()
+  const { user } = useAuth()
+  const socketRef = useRef<Socket>()
 
   useEffect(() => {
-    if (!session?.user?.id) return
-
-    // Connect to WebSocket server
-    socketRef.current = io(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000", {
-      path: "/api/socket",
-      addTrailingSlash: false,
-      auth: {
-        userId: session.user.id
-      }
-    })
-
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect()
-      }
+    if (user) {
+      socketRef.current = io(process.env.NEXT_PUBLIC_APP_URL!, {
+        path: '/api/socketio',
+      })
     }
-  }, [session])
+
+    return () => {
+      socketRef.current?.disconnect()
+    }
+  }, [user])
 
   // Send message
   const sendMessage = useCallback((matchId: string, receiverId: string, message: string) => {

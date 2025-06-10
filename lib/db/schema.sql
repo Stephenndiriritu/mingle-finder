@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(255),
-    date_of_birth DATE,
+    birthdate DATE,
     gender VARCHAR(50),
     location VARCHAR(255),
     subscription_type VARCHAR(50) DEFAULT 'free',
@@ -72,9 +72,24 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create testimonials table
+CREATE TABLE IF NOT EXISTS testimonials (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    story TEXT NOT NULL,
+    photo_url VARCHAR(500),
+    is_approved BOOLEAN DEFAULT false,
+    is_featured BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_matches_users ON matches(user1_id, user2_id);
 CREATE INDEX IF NOT EXISTS idx_messages_match ON messages(match_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id); 
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_testimonials_user ON testimonials(user_id);
+CREATE INDEX IF NOT EXISTS idx_testimonials_approved ON testimonials(is_approved);

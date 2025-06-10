@@ -22,6 +22,8 @@ interface Testimonial {
 }
 
 export function LandingPage() {
+  console.log("LandingPage component rendering")
+
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState<"login" | "register">("register")
   const [testimonials, setTestimonials] = useState<Testimonial[]>([])
@@ -36,6 +38,7 @@ export function LandingPage() {
   const [submitError, setSubmitError] = useState("")
 
   useEffect(() => {
+    console.log("LandingPage useEffect running")
     fetchTestimonials()
   }, [])
 
@@ -44,10 +47,11 @@ export function LandingPage() {
       const response = await fetch("/api/testimonials")
       if (response.ok) {
         const data = await response.json()
-        setTestimonials(data.testimonials)
+        setTestimonials(data.testimonials || [])
       }
     } catch (error) {
       console.error("Failed to fetch testimonials:", error)
+      setTestimonials([])
     } finally {
       setIsLoading(false)
     }
@@ -154,8 +158,8 @@ export function LandingPage() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center">
         <div className="max-w-4xl mx-auto">
-          <Badge variant="secondary" className="mb-6 bg-pink-100 text-pink-700 border-pink-200">
-            🎉 Over 2 Million Happy Users
+          <Badge variant="secondary" className="mb-6 bg-pink-100 text-pink-700 border-pink-200 animate-pulse">
+            🎉 Over 2 Million Happy Users • 50K+ Matches This Week
           </Badge>
           <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
             Find Your Perfect
@@ -273,33 +277,39 @@ export function LandingPage() {
       </section>
 
       {/* Success Stories Section */}
-      <section className="bg-gray-50 py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <Badge variant="secondary" className="mb-4">Success Stories</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Real People, Real Connections
-            </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              Discover how Mingle Finder has brought couples together and created lasting relationships.
-            </p>
-          </div>
+      <section id="success-stories" className="container mx-auto px-4 py-20">
+        <div className="text-center mb-16">
+          <Badge variant="secondary" className="mb-4 bg-green-100 text-green-700 border-green-200">
+            💕 Success Stories
+          </Badge>
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Real Love Stories</h2>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Read inspiring stories from couples who found their perfect match on Mingle Finder.
+          </p>
+        </div>
 
+        <div className="max-w-6xl mx-auto">
           {isLoading ? (
-            <div className="flex justify-center">
+            <div className="flex justify-center items-center min-h-[200px]">
               <LoadingSpinner size="lg" />
             </div>
-          ) : testimonials.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          ) : testimonials && testimonials.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {testimonials.map((testimonial) => (
-                <Card key={testimonial.id} className="text-center">
+                <Card key={testimonial.id} className="text-center hover:shadow-xl transition-all duration-300">
                   <CardContent className="pt-6">
                     <div className="mb-4">
-                      <img
-                        src={testimonial.photo_url || testimonial.photos[0] || "/placeholder.svg"}
-                        alt={testimonial.name}
-                        className="w-20 h-20 rounded-full mx-auto object-cover"
-                      />
+                      {testimonial.photo_url ? (
+                        <img
+                          src={testimonial.photo_url}
+                          alt={`${testimonial.name}'s story`}
+                          className="w-24 h-24 rounded-full mx-auto object-cover"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full mx-auto bg-gradient-to-r from-pink-200 to-purple-200 flex items-center justify-center">
+                          <Heart className="h-12 w-12 text-pink-500" />
+                        </div>
+                      )}
                     </div>
                     <h3 className="font-semibold text-lg mb-2">{testimonial.title}</h3>
                     <p className="text-gray-600 mb-4">{testimonial.story}</p>

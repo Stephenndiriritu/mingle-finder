@@ -214,4 +214,30 @@ export default function ContactPage() {
       </div>
     </div>
   )
+}
+
+function ContactCard({ 
+  title, 
+  description, 
+  email, 
+  response 
+}: { 
+  title: string
+  description: string
+  email: string
+  response: string
+}) {
+  return (
+    <div className="bg-gray-50 rounded-lg p-6">
+      <h3 className="text-xl font-semibold mb-2">{title}</h3>
+      <p className="text-gray-600 mb-4">{description}</p>
+      <a 
+        href={`mailto:${email}`}
+        className="text-pink-500 hover:text-pink-600 font-semibold block mb-2"
+      >
+        {email}
+      </a>
+      <p className="text-sm text-gray-500">{response}</p>
+    </div>
+  )
 } 

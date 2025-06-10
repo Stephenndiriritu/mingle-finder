@@ -1,185 +1,161 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { getUserFromRequest } from "@/lib/auth"
 
 // Mock messages for development
-const mockMessages = new Map()
-
-// Initialize with some mock conversations
-mockMessages.set("1", [
-  {
-    id: 1,
-    content: "Hey! How are you?",
-    sender_id: 2,
-    receiver_id: 1,
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    is_read: true
-  },
-  {
-    id: 2,
-    content: "I'm good, thanks! How about you?",
-    sender_id: 1,
-    receiver_id: 2,
-    created_at: new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString(),
-    is_read: true
-  },
-  {
-    id: 3,
-    content: "Would you like to meet for coffee sometime?",
-    sender_id: 2,
-    receiver_id: 1,
-    created_at: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
-    is_read: false
-  }
-])
+const mockMessages = {
+  "1": [
+    {
+      id: 1,
+      message: "Hey! How are you?",
+      sender_id: 2,
+      receiver_id: 1,
+      sender_name: "Sarah Johnson",
+      created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      is_read: false
+    },
+    {
+      id: 2,
+      message: "Hi Sarah! I'm doing great, thanks for asking. How about you?",
+      sender_id: 1,
+      receiver_id: 2,
+      sender_name: "Test User",
+      created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      is_read: true
+    },
+    {
+      id: 3,
+      message: "I'm good too! I saw you like hiking. Do you have any favorite trails?",
+      sender_id: 2,
+      receiver_id: 1,
+      sender_name: "Sarah Johnson",
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      is_read: false
+    }
+  ],
+  "2": [
+    {
+      id: 4,
+      message: "Would you like to grab coffee sometime?",
+      sender_id: 3,
+      receiver_id: 1,
+      sender_name: "Michael Chen",
+      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+      is_read: true
+    },
+    {
+      id: 5,
+      message: "That sounds great! I know a nice place downtown.",
+      sender_id: 1,
+      receiver_id: 3,
+      sender_name: "Test User",
+      created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      is_read: true
+    }
+  ],
+  "3": []
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const matchId = searchParams.get("match_id")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
-    const before = searchParams.get("before")
 
     if (!matchId) {
       return NextResponse.json({ error: "Match ID is required" }, { status: 400 })
     }
 
-    try {
-      let query = `
-        SELECT m.id, m.content, m.sender_id, m.receiver_id, m.created_at, m.is_read
-        FROM messages m
-        WHERE m.match_id = $1
-      `
-      const queryParams = [matchId]
+    // Return mock messages for the match
+    const messages = mockMessages[matchId as keyof typeof mockMessages] || []
 
-      if (before) {
-        query += " AND m.created_at < $2"
-        queryParams.push(before)
-      }
-
-      query += " ORDER BY m.created_at DESC LIMIT $" + (queryParams.length + 1)
-      queryParams.push(limit)
-
-      const result = await pool.query(query, queryParams)
-
-      // Mark messages as read
-      if (result.rows.length > 0) {
-        await pool.query(
-          "UPDATE messages SET is_read = true WHERE receiver_id = $1 AND match_id = $2 AND is_read = false",
-          [user.id, matchId]
-        )
-      }
-
-      return NextResponse.json({ messages: result.rows.reverse() })
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      
-      // Use mock data in development
-      if (process.env.NODE_ENV === "development") {
-        const messages = mockMessages.get(matchId) || []
-        let filteredMessages = [...messages]
-        
-        if (before) {
-          filteredMessages = filteredMessages.filter(msg => new Date(msg.created_at) < new Date(before))
-        }
-        
-        const paginatedMessages = filteredMessages.slice(-limit)
-        
-        // Mark mock messages as read
-        mockMessages.set(
-          matchId,
-          messages.map(msg => 
-            msg.receiver_id === user.id ? { ...msg, is_read: true } : msg
-          )
-        )
-        
-        return NextResponse.json({ 
-          messages: paginatedMessages,
-          _mock: true
-        })
-      }
-      
-      throw dbError
-    }
+    return NextResponse.json({
+      messages,
+      page: 1,
+      limit: 50,
+      hasMore: false
+    })
   } catch (error) {
-    console.error("Get messages error:", error)
-    return NextResponse.json({ 
-      error: "Failed to fetch messages. Please try again later.",
-      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
-    }, { status: 500 })
+    console.error("Failed to fetch messages:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
+
+// Store new messages in memory for demo
+let messageCounter = 6
+const newMessages: any[] = []
 
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const body = await request.json()
+    const { match_id, receiver_id, message, user_id } = body
+
+    if (!match_id || !receiver_id || !message) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const { matchId, content } = await request.json()
+    // Check user subscription status
+    // In a real app, you'd fetch this from your database
+    // For demo, we'll simulate subscription check
+    const userSubscription = getUserSubscription(user_id || 1)
 
-    if (!matchId || !content) {
-      return NextResponse.json({ error: "Match ID and content are required" }, { status: 400 })
+    if (userSubscription === 'free') {
+      return NextResponse.json({
+        error: "Messaging requires a premium subscription",
+        code: "SUBSCRIPTION_REQUIRED",
+        message: "Free users cannot send messages. Upgrade to Premium to start conversations!"
+      }, { status: 403 })
     }
 
-    try {
-      // Verify match exists and user is part of it
-      const matchResult = await pool.query(
-        "SELECT user1_id, user2_id FROM matches WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)",
-        [matchId, user.id]
-      )
-
-      if (matchResult.rows.length === 0) {
-        return NextResponse.json({ error: "Match not found or unauthorized" }, { status: 404 })
-      }
-
-      const receiverId = matchResult.rows[0].user1_id === user.id 
-        ? matchResult.rows[0].user2_id 
-        : matchResult.rows[0].user1_id
-
-      const result = await pool.query(
-        "INSERT INTO messages (match_id, sender_id, receiver_id, content) VALUES ($1, $2, $3, $4) RETURNING *",
-        [matchId, user.id, receiverId, content]
-      )
-
-      return NextResponse.json({ message: result.rows[0] })
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      
-      // Use mock data in development
-      if (process.env.NODE_ENV === "development") {
-        const messages = mockMessages.get(matchId) || []
-        const newMessage = {
-          id: Date.now(),
-          content,
-          sender_id: user.id,
-          receiver_id: 2, // Mock receiver ID
-          created_at: new Date().toISOString(),
-          is_read: false
-        }
-        
-        messages.push(newMessage)
-        mockMessages.set(matchId, messages)
-        
-        return NextResponse.json({ 
-          message: newMessage,
-          _mock: true
-        })
-      }
-      
-      throw dbError
+    // Create new message
+    const newMessage = {
+      id: messageCounter++,
+      message: message,
+      sender_id: user_id || 1, // Current user ID
+      receiver_id: receiver_id,
+      sender_name: "Test User",
+      created_at: new Date().toISOString(),
+      is_read: false
     }
+
+    // Add to mock messages
+    if (!mockMessages[match_id as keyof typeof mockMessages]) {
+      mockMessages[match_id as keyof typeof mockMessages] = []
+    }
+    mockMessages[match_id as keyof typeof mockMessages].push(newMessage)
+
+    // Store for real-time updates
+    newMessages.push(newMessage)
+
+    console.log(`New message sent in match ${match_id}: "${message}" (subscription: ${userSubscription})`)
+
+    return NextResponse.json({
+      message: newMessage,
+      success: true
+    })
   } catch (error) {
-    console.error("Send message error:", error)
-    return NextResponse.json({ 
-      error: "Failed to send message. Please try again later.",
-      details: process.env.NODE_ENV === "development" ? error.message : undefined
-    }, { status: 500 })
+    console.error("Failed to send message:", error)
+    return NextResponse.json(
+      { error: "Failed to send message" },
+      { status: 500 }
+    )
   }
 }
+
+// Mock function to get user subscription
+// In production, this would query your database
+function getUserSubscription(userId: number): string {
+  // For demo purposes, return 'free' for user ID 1, 'premium' for others
+  // In real app, you'd query the database
+  const mockSubscriptions = {
+    1: 'free',    // Test user is on free plan
+    2: 'premium', // Other users have premium
+    3: 'premium',
+    4: 'premium_plus'
+  }
+
+  return mockSubscriptions[userId as keyof typeof mockSubscriptions] || 'free'
+}
+
+

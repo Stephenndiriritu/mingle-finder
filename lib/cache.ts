@@ -1,13 +1,101 @@
-import Redis from 'ioredis'
+import { Redis } from '@upstash/redis'
 import { Profile } from '@/types/profile'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis({
+  url: process.env.REDIS_URL!,
+  token: process.env.REDIS_TOKEN!,
+})
 
 const CACHE_TTL = {
   PROFILE: 3600, // 1 hour
   MATCHES: 300, // 5 minutes
   DISCOVER: 60, // 1 minute
   USER_PREFERENCES: 3600, // 1 hour
+}
+
+interface CacheConfig {
+  ttl: number // Time to live in seconds
+  tags?: string[] // Cache tags for invalidation
+}
+
+export class CacheManager {
+  static async get(key: string): Promise<any> {
+    try {
+      const cached = await redis.get(key)
+      return cached ? JSON.parse(cached as string) : null
+    } catch (error) {
+      console.error('Cache get error:', error)
+      return null
+    }
+  }
+
+  static async set(key: string, value: any, config: CacheConfig): Promise<void> {
+    try {
+      await redis.set(key, JSON.stringify(value), {
+        ex: config.ttl,
+      })
+
+      if (config.tags) {
+        await Promise.all(
+          config.tags.map(tag =>
+            redis.sadd(`cache:tags:${tag}`, key)
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Cache set error:', error)
+    }
+  }
+
+  static async invalidateByTags(tags: string[]): Promise<void> {
+    try {
+      const keys = await Promise.all(
+        tags.map(tag => redis.smembers(`cache:tags:${tag}`))
+      )
+
+      const uniqueKeys = [...new Set(keys.flat())]
+      if (uniqueKeys.length > 0) {
+        await redis.del(uniqueKeys)
+        await Promise.all(
+          tags.map(tag => redis.del(`cache:tags:${tag}`))
+        )
+      }
+    } catch (error) {
+      console.error('Cache invalidation error:', error)
+    }
+  }
+}
+
+// Cache middleware decorator
+export function withCache(config: CacheConfig) {
+  return async function(
+    req: NextRequest,
+    handler: () => Promise<NextResponse>
+  ): Promise<NextResponse> {
+    if (req.method !== 'GET') {
+      return handler()
+    }
+
+    const cacheKey = `api:${req.nextUrl.pathname}${req.nextUrl.search}`
+    const cached = await CacheManager.get(cacheKey)
+
+    if (cached) {
+      return new NextResponse(JSON.stringify(cached), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const response = await handler()
+    const data = await response.json()
+
+    await CacheManager.set(cacheKey, data, config)
+
+    return new NextResponse(JSON.stringify(data), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }
 
 export async function cacheGet<T>(key: string): Promise<T | null> {

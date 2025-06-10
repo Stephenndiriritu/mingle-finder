@@ -1,156 +1,157 @@
-import { Server as SocketIOServer, Socket } from "socket.io"
-import type { Server as HTTPServer } from "http"
-import { verifyToken } from "./auth"
+import { Server as HTTPServer } from 'http'
+import { Server as SocketIOServer } from 'socket.io'
 import pool from "./db"
 
-declare module "socket.io" {
-  interface Socket {
-    userId: number
-  }
+interface SocketUser {
+  id: number
+  name: string
+  isAdmin: boolean
 }
 
-export class SocketManager {
+export class SocketService {
   private io: SocketIOServer
-  private userSockets: Map<number, string> = new Map()
+  private static instance: SocketService
+  private connectedUsers: Map<string, SocketUser> = new Map()
 
-  constructor(server: HTTPServer) {
+  private constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
+      path: '/api/socketio',
       cors: {
         origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        methods: ["GET", "POST"],
-      },
-    })
-
-    this.setupSocketHandlers()
-  }
-
-  private setupSocketHandlers() {
-    this.io.use((socket: Socket, next) => {
-      const token = socket.handshake.auth.token
-      const user = verifyToken(token)
-
-      if (!user) {
-        return next(new Error("Authentication error"))
+        methods: ['GET', 'POST']
       }
-
-      socket.userId = user.id
-      next()
     })
 
-    this.io.on("connection", (socket: Socket) => {
-      console.log(`User ${socket.userId} connected`)
-      this.userSockets.set(socket.userId, socket.id)
+    this.setupMiddleware()
+    this.setupEventHandlers()
+  }
 
-      this.updateUserOnlineStatus(socket.userId, true)
+  private setupMiddleware() {
+    this.io.use(async (socket, next) => {
+      try {
+        // Get user ID from auth data
+        const userId = socket.handshake.auth.userId
+        
+        if (!userId) {
+          return next(new Error('Unauthorized'))
+        }
+        
+        // Verify user exists in database
+        const result = await pool.query(
+          "SELECT id, name, is_admin FROM users WHERE id = $1 AND is_active = true",
+          [userId]
+        )
+        
+        if (result.rows.length === 0) {
+          return next(new Error('User not found'))
+        }
+        
+        const user = result.rows[0]
+        socket.data.user = {
+          id: user.id,
+          name: user.name,
+          isAdmin: user.is_admin
+        }
+        
+        next()
+      } catch (error) {
+        next(new Error('Authentication failed'))
+      }
+    })
+  }
 
-      socket.on("join_match", (matchId) => {
-        socket.join(`match_${matchId}`)
+  private setupEventHandlers() {
+    this.io.on('connection', (socket) => {
+      const user = socket.data.user as SocketUser
+      
+      // Store connected user
+      this.connectedUsers.set(socket.id, user)
+      
+      console.log(`User connected: ${user.name} (${user.id})`)
+      
+      // Handle disconnect
+      socket.on('disconnect', () => {
+        this.connectedUsers.delete(socket.id)
+        console.log(`User disconnected: ${user.name} (${user.id})`)
       })
-
-      socket.on("send_message", async (data) => {
+      
+      // Handle sending messages
+      socket.on('send_message', async (data, callback) => {
         try {
-          const { matchId, message, receiverId } = data
-
-          const result = await pool.query(
-            `INSERT INTO messages (match_id, sender_id, receiver_id, message) 
-             VALUES ($1, $2, $3, $4) RETURNING *`,
-            [matchId, socket.userId, receiverId, message],
-          )
-
-          const newMessage = result.rows[0]
-          this.io.to(`match_${matchId}`).emit("new_message", newMessage)
-
-          const receiverSocketId = this.userSockets.get(receiverId)
-          if (!receiverSocketId) {
-            await this.sendPushNotification(receiverId, "New Message", message)
+          const { match_id, receiver_id, message } = data
+          
+          // Validate data
+          if (!match_id || !receiver_id || !message) {
+            return callback({ error: 'Invalid message data' })
           }
+          
+          // Save message to database
+          const result = await pool.query(
+            `INSERT INTO messages (match_id, sender_id, receiver_id, message)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, match_id, sender_id, receiver_id, message, created_at, is_read`,
+            [match_id, user.id, receiver_id, message]
+          )
+          
+          const savedMessage = result.rows[0]
+          
+          // Emit to receiver if online
+          this.io.sockets.sockets.forEach(s => {
+            const socketUser = s.data.user as SocketUser
+            if (socketUser && socketUser.id === receiver_id) {
+              s.emit('new_message', savedMessage)
+            }
+          })
+          
+          // Return saved message to sender
+          callback({ message: savedMessage })
         } catch (error) {
-          console.error("Error sending message:", error)
-          socket.emit("error", "Failed to send message")
+          console.error('Error sending message:', error)
+          callback({ error: 'Failed to send message' })
         }
       })
-
-      socket.on("typing", (data) => {
-        const { matchId, receiverId } = data
-        const receiverSocketId = this.userSockets.get(receiverId)
-        if (receiverSocketId) {
-          this.io.to(receiverSocketId).emit("user_typing", {
-            matchId,
-            userId: socket.userId,
-          })
-        }
-      })
-
-      socket.on("stop_typing", (data) => {
-        const { matchId, receiverId } = data
-        const receiverSocketId = this.userSockets.get(receiverId)
-        if (receiverSocketId) {
-          this.io.to(receiverSocketId).emit("user_stop_typing", {
-            matchId,
-            userId: socket.userId,
-          })
-        }
-      })
-
-      socket.on("disconnect", () => {
-        console.log(`User ${socket.userId} disconnected`)
-        this.userSockets.delete(socket.userId)
-        this.updateUserOnlineStatus(socket.userId, false)
+      
+      // Handle typing indicators
+      socket.on('typing', (data) => {
+        const { match_id, isTyping } = data
+        
+        if (!match_id) return
+        
+        // Find receiver sockets and emit typing event
+        this.io.sockets.sockets.forEach(s => {
+          const socketUser = s.data.user as SocketUser
+          if (socketUser && socketUser.id !== user.id) {
+            s.emit('typing', {
+              match_id,
+              user_id: user.id,
+              isTyping
+            })
+          }
+        })
       })
     })
   }
 
-  private async updateUserOnlineStatus(userId: number, isOnline: boolean) {
-    try {
-      await pool.query("UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = $1", [userId])
-    } catch (error) {
-      console.error("Error updating user online status:", error)
+  public static getInstance(server?: HTTPServer): SocketService {
+    if (!SocketService.instance && server) {
+      SocketService.instance = new SocketService(server)
     }
+    
+    if (!SocketService.instance) {
+      throw new Error('Socket service not initialized')
+    }
+    
+    return SocketService.instance
   }
 
-  private async sendPushNotification(userId: number, title: string, body: string) {
-    try {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message) 
-         VALUES ($1, $2, $3, $4)`,
-        [userId, "message", title, body],
-      )
-
-      console.log(`Push notification sent to user ${userId}: ${title}`)
-    } catch (error) {
-      console.error("Error sending push notification:", error)
-    }
+  public getIO(): SocketIOServer {
+    return this.io
   }
 
-  public sendNotificationToUser(userId: number, notification: any) {
-    const socketId = this.userSockets.get(userId)
-    if (socketId) {
-      this.io.to(socketId).emit("notification", notification)
-    }
-  }
-
-  public sendMatchNotification(userId1: number, userId2: number) {
-    const socket1 = this.userSockets.get(userId1)
-    const socket2 = this.userSockets.get(userId2)
-
-    if (socket1) {
-      this.io.to(socket1).emit("new_match", { userId: userId2 })
-    }
-    if (socket2) {
-      this.io.to(socket2).emit("new_match", { userId: userId1 })
-    }
+  public getConnectedUsers(): Map<string, SocketUser> {
+    return this.connectedUsers
   }
 }
 
-let socketManager: SocketManager | null = null
+export default SocketService
 
-export function initializeSocket(server: HTTPServer) {
-  if (!socketManager) {
-    socketManager = new SocketManager(server)
-  }
-  return socketManager
-}
-
-export function getSocketManager() {
-  return socketManager
-}

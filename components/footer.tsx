@@ -2,22 +2,32 @@
 
 import Link from "next/link"
 import { Heart, Facebook, Twitter, Instagram, Linkedin, Youtube } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { AuthModal } from "@/components/auth-modal"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
+  const router = useRouter()
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState<"login" | "register">("register")
+
+  const openAuth = (mode: "login" | "register") => {
+    setAuthMode(mode)
+    setShowAuthModal(true)
+  }
 
   const socialLinks = [
     { icon: Facebook, href: "https://facebook.com/minglefinder", label: "Facebook" },
     { icon: Twitter, href: "https://twitter.com/minglefinder", label: "Twitter" },
     { icon: Instagram, href: "https://instagram.com/minglefinder", label: "Instagram" },
-    { icon: Linkedin, href: "https://linkedin.com/company/minglefinder", label: "LinkedIn" },
-    { icon: Youtube, href: "https://youtube.com/minglefinder", label: "YouTube" }
+    { icon: Linkedin, href: "https://linkedin.com/company/minglefinder", label: "LinkedIn" }
   ]
 
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-4 gap-8">
+        <div className="grid md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center space-x-2 mb-4">
               <Heart className="h-6 w-6 text-pink-500" />
@@ -44,7 +54,7 @@ export function Footer() {
             </div>
           </div>
           <div>
-            <h3 className="font-semibold mb-4">Product</h3>
+            <h3 className="font-semibold mb-4">Features</h3>
             <ul className="space-y-2 text-gray-400">
               <li>
                 <Link href="/features" className="hover:text-white transition-colors">
@@ -62,34 +72,12 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/success-stories" className="hover:text-white transition-colors">
+                <button 
+                  onClick={() => router.push('/success-stories')}
+                  className="hover:text-white transition-colors"
+                >
                   Success Stories
-                </Link>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="font-semibold mb-4">Company</h3>
-            <ul className="space-y-2 text-gray-400">
-              <li>
-                <Link href="/about" className="hover:text-white transition-colors">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link href="/careers" className="hover:text-white transition-colors">
-                  Careers
-                </Link>
-              </li>
-              <li>
-                <Link href="/press" className="hover:text-white transition-colors">
-                  Press
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="hover:text-white transition-colors">
-                  Contact
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
@@ -112,9 +100,12 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/guidelines" className="hover:text-white transition-colors">
-                  Community Guidelines
-                </Link>
+                <button 
+                  onClick={() => openAuth("register")}
+                  className="hover:text-white transition-colors"
+                >
+                  Get Started
+                </button>
               </li>
             </ul>
           </div>
@@ -123,6 +114,13 @@ export function Footer() {
           <p>&copy; {currentYear} Mingle Finder. All rights reserved. Made with ❤️ for finding love.</p>
         </div>
       </div>
+      
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        mode={authMode}
+        onModeChange={setAuthMode}
+      />
     </footer>
   )
 } 

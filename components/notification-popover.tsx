@@ -50,23 +50,28 @@ export function NotificationPopover() {
 
   const markAsRead = async (notificationIds: number[]) => {
     try {
-      await fetch("/api/notifications", {
+      const response = await fetch("/api/notifications", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ notificationIds }),
+        body: JSON.stringify({
+          notificationIds,
+          markAsRead: true
+        }),
       })
 
-      // Update local state
-      setNotifications(prev =>
-        prev.map(notification =>
-          notificationIds.includes(notification.id)
-            ? { ...notification, is_read: true }
-            : notification
+      if (response.ok) {
+        // Update local state
+        setNotifications(prev =>
+          prev.map(notification =>
+            notificationIds.includes(notification.id)
+              ? { ...notification, is_read: true }
+              : notification
+          )
         )
-      )
-      setUnreadCount(prev => Math.max(0, prev - notificationIds.length))
+        setUnreadCount(prev => Math.max(0, prev - notificationIds.length))
+      }
     } catch (error) {
       console.error("Failed to mark notifications as read:", error)
     }

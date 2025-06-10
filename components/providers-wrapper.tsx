@@ -1,22 +1,22 @@
 'use client'
 
-import { PayPalScriptProvider } from "@paypal/react-paypal-js"
-import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "react-hot-toast"
-
-const initialPayPalOptions = {
-  clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "",
-  currency: "USD",
-  intent: "capture",
-}
+import { ThemeProvider } from "@/components/theme-provider"
+import { PayPalProvider } from "@/components/paypal-provider"
 
 export function ProvidersWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <PayPalScriptProvider options={initialPayPalOptions}>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem={false}
+      disableTransitionOnChange
+    >
+      <PayPalProvider>
         {children}
-        <Toaster />
-      </PayPalScriptProvider>
-    </AuthProvider>
+      </PayPalProvider>
+      <Toaster />
+    </ThemeProvider>
   )
-} 
+}
+

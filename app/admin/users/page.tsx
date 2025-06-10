@@ -21,7 +21,7 @@ interface User {
   id: number
   email: string
   name: string
-  date_of_birth: string
+  birthdate: string
   gender: string
   location: string
   is_active: boolean
@@ -125,7 +125,7 @@ export default function AdminUsersPage() {
     }
   }
 
-  if (!user?.is_admin) {
+  if (!user?.isAdmin) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <p className="text-red-600">Unauthorized access</p>

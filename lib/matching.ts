@@ -13,7 +13,7 @@ export async function getMatches(preferences: MatchingPreferences, limit = 10, o
   try {
     const query = `
       SELECT DISTINCT 
-        u.id, u.name, u.date_of_birth, u.gender, u.location, u.latitude, u.longitude,
+        u.id, u.name, u.birthdate, u.gender, u.location, u.latitude, u.longitude,
         p.bio, p.photos, p.age, p.height, p.occupation, p.interests, p.education,
         p.profile_completion_percentage,
         CASE 

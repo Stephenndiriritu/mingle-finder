@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { hashPassword, generateToken } from "@/lib/auth"
+import { hashPassword } from "@/lib/auth-utils"
+import crypto from "crypto"
+import { query } from "@/lib/db"
+// Removed NextAuth import
+import { cookies } from 'next/headers'
+import { sign } from 'jsonwebtoken'
 
 // Mock user for development
 const mockUser = {
@@ -21,97 +26,144 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
     }
 
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
+    }
+
+    // Start transaction
+    const client = await pool.connect()
     try {
-      // Check if user already exists
-      const existingUser = await pool.query("SELECT id FROM users WHERE email = $1", [email])
+      await client.query('BEGIN')
+
+      // Check if user exists
+      const existingUser = await client.query(
+        "SELECT id FROM users WHERE email = $1",
+        [email]
+      )
+      
       if (existingUser.rows.length > 0) {
-        return NextResponse.json({ error: "User already exists" }, { status: 409 })
+        return NextResponse.json({ error: "Email already registered" }, { status: 409 })
       }
 
       // Hash password
-      const passwordHash = hashPassword(password)
+      const passwordHash = await hashPassword(password)
 
-      // Create user
-      const userResult = await pool.query(
-        `INSERT INTO users (email, password_hash, name, date_of_birth, gender, location) 
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, name, is_admin, subscription_type, is_verified`,
-        [email, passwordHash, name, dateOfBirth, gender, location],
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString("hex")
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+      // Validate and parse date of birth
+      let parsedDateOfBirth = null
+      if (dateOfBirth) {
+        const date = new Date(dateOfBirth)
+        if (!isNaN(date.getTime())) {
+          parsedDateOfBirth = date.toISOString().split('T')[0]
+        }
+      }
+
+      // Create user with is_verified set to false initially
+      const userResult = await client.query(
+        `INSERT INTO users (
+          email, password_hash, name, birthdate, 
+          gender, location, is_verified, verification_token,
+          verification_token_expires, is_admin, is_active
+        ) VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, false, true) 
+        RETURNING id, email, name`,
+        [email, passwordHash, name, parsedDateOfBirth, gender || null, location || null, verificationToken, tokenExpiry]
       )
 
       const user = userResult.rows[0]
 
+      // Calculate age if birthdate is provided
+      let age = null
+      if (parsedDateOfBirth) {
+        const birthDate = new Date(parsedDateOfBirth)
+        const today = new Date()
+        age = today.getFullYear() - birthDate.getFullYear()
+        const m = today.getMonth() - birthDate.getMonth()
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--
+        }
+      }
+
       // Create profile
-      await pool.query("INSERT INTO profiles (user_id, age) VALUES ($1, $2)", [
-        user.id,
-        dateOfBirth ? new Date().getFullYear() - new Date(dateOfBirth).getFullYear() : null,
-      ])
+      await client.query(
+        `INSERT INTO profiles (user_id, first_name, age, profile_completion_percentage)
+         VALUES ($1, $2, $3, $4)`,
+        [user.id, name, age, 20] // Set initial profile completion to 20%
+      )
 
-      // Create user preferences
-      await pool.query("INSERT INTO user_preferences (user_id) VALUES ($1)", [user.id])
+      // Create preferences
+      await client.query(
+        "INSERT INTO user_preferences (user_id) VALUES ($1)",
+        [user.id]
+      )
 
-      // Generate token
-      const token = generateToken(user)
+      await client.query('COMMIT')
 
-      // Create response
+      // Generate JWT token for automatic login
+      const token = sign(
+        {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          isAdmin: false,
+          isVerified: false,
+          isActive: true
+        },
+        process.env.NEXTAUTH_SECRET || 'fallback-secret',
+        { expiresIn: '7d' }
+      )
+
+      // Create response with session data
       const response = NextResponse.json({
-        message: "User registered successfully",
+        message: "Registration successful. Please verify your email.",
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
-          is_admin: user.is_admin,
-          subscription_type: user.subscription_type,
-          is_verified: user.is_verified,
+          isVerified: false,
+          isAdmin: false,
+          isActive: true
         },
+        verificationToken, // Include this for testing purposes
+        session: {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name
+          },
+          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        }
       })
 
-      // Set cookie
-      response.cookies.set("auth-token", token, {
+      // Set the session cookie
+      response.cookies.set('next-auth.session-token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60, // 7 days
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 // 7 days
       })
 
       return response
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      
-      // Use mock data in development
-      if (process.env.NODE_ENV === "development") {
-        const mockUserData = {
-          ...mockUser,
-          email,
-          name
-        }
-        const token = generateToken(mockUserData)
-        
-        const response = NextResponse.json({
-          message: "User registered successfully (mock)",
-          user: mockUserData
-        })
 
-        response.cookies.set("auth-token", token, {
-          httpOnly: true,
-          secure: false,
-          sameSite: "lax",
-          maxAge: 7 * 24 * 60 * 60, // 7 days
-        })
-
-        return response
-      }
-
-      throw dbError
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
     }
   } catch (error) {
     console.error("Registration error:", error)
     return NextResponse.json({ 
-      error: "Registration failed. Please try again later.",
-      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+      error: error instanceof Error ? error.message : "Registration failed. Please try again later." 
     }, { status: 500 })
   }
 }

@@ -3,41 +3,12 @@ import { getUserFromRequest } from "@/lib/auth"
 import pool from "@/lib/db"
 import { SUBSCRIPTION_PLANS, createOrder, capturePayment } from "@/lib/paypal"
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get current subscription
-    const result = await pool.query(
-      `SELECT subscription_type, subscription_expires_at
-       FROM users WHERE id = $1`,
-      [user.id]
-    )
-
-    const userData = result.rows[0]
-    
-    return NextResponse.json({
-      subscription: {
-        type: userData.subscription_type,
-        expires_at: userData.subscription_expires_at,
-      },
-      available_plans: SUBSCRIPTION_PLANS,
-    })
-  } catch (error) {
-    console.error("Failed to fetch subscription:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch subscription" },
-      { status: 500 }
-    )
-  }
-}
-
+/**
+ * Create a new subscription order
+ */
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -63,25 +34,32 @@ export async function POST(request: NextRequest) {
       [user.id, order.id, planId]
     )
 
-    return NextResponse.json({ orderId: order.id })
+    return NextResponse.json({
+      orderId: order.id,
+      status: order.status,
+    })
   } catch (error) {
-    console.error("Failed to create subscription:", error)
+    console.error("Subscription creation error:", error)
     return NextResponse.json(
-      { error: "Failed to create subscription" },
+      { error: error instanceof Error ? error.message : "Failed to create subscription" },
       { status: 500 }
     )
   }
 }
 
+/**
+ * Handle subscription actions (capture, cancel, etc.)
+ */
 export async function PUT(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { action, orderId } = await request.json()
 
+    // Handle payment capture
     if (action === "capture" && orderId) {
       // Verify order exists and is pending
       const orderResult = await pool.query(
@@ -139,23 +117,46 @@ export async function PUT(request: NextRequest) {
           expires_at: expiryDate,
         },
       })
-    } else if (action === "cancel") {
+    }
+    
+    // Handle subscription cancellation
+    else if (action === "cancel") {
       await pool.query(
         `UPDATE users 
-         SET subscription_type = 'free',
-             subscription_expires_at = NULL
+         SET subscription_cancel_requested = true
          WHERE id = $1`,
         [user.id]
       )
-
-      return NextResponse.json({ message: "Subscription cancelled successfully" })
+      
+      return NextResponse.json({
+        message: "Subscription cancellation requested",
+      })
     }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    
+    // Handle subscription resumption
+    else if (action === "resume") {
+      await pool.query(
+        `UPDATE users 
+         SET subscription_cancel_requested = false
+         WHERE id = $1`,
+        [user.id]
+      )
+      
+      return NextResponse.json({
+        message: "Subscription resumption requested",
+      })
+    }
+    
+    else {
+      return NextResponse.json(
+        { error: "Invalid action" },
+        { status: 400 }
+      )
+    }
   } catch (error) {
-    console.error("Failed to update subscription:", error)
+    console.error("Subscription action error:", error)
     return NextResponse.json(
-      { error: "Failed to update subscription" },
+      { error: error instanceof Error ? error.message : "Failed to process subscription action" },
       { status: 500 }
     )
   }

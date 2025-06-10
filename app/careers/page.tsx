@@ -165,149 +165,170 @@ export default function CareersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-20">
-        <div className="text-center mb-12">
-          <Badge variant="secondary" className="mb-4">Join Our Team</Badge>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            Help People Find
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 block">
-              Their Perfect Match
-            </span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Join our mission to create meaningful connections and make dating better for everyone.
-          </p>
-        </div>
-
-        {/* Company Values */}
-        <div className="mb-20">
-          <h2 className="text-3xl font-bold text-center mb-12">Our Values</h2>
-          <div className="grid md:grid-cols-4 gap-8">
-            {values.map((value, index) => (
-              <Card key={index} className="text-center">
-                <CardContent className="p-6">
-                  <value.icon className="h-12 w-12 text-pink-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">{value.title}</h3>
-                  <p className="text-gray-600">{value.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+    <div className="container mx-auto px-4 py-12">
+      <h1 className="text-4xl font-bold text-center mb-8">Join Our Team</h1>
+      <div className="max-w-4xl mx-auto">
+        <section className="mb-12">
+          <h2 className="text-2xl font-semibold mb-4">Why Work With Us?</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <BenefitCard
+              icon="🌍"
+              title="Remote First"
+              description="Work from anywhere in the world with our distributed team."
+            />
+            <BenefitCard
+              icon="💪"
+              title="Health Benefits"
+              description="Comprehensive health, dental, and vision coverage."
+            />
+            <BenefitCard
+              icon="📚"
+              title="Learning Budget"
+              description="Annual budget for courses, conferences, and books."
+            />
           </div>
-        </div>
+        </section>
 
-        {/* Benefits */}
-        <div className="mb-20">
-          <h2 className="text-3xl font-bold text-center mb-12">Benefits & Perks</h2>
-          <div className="grid md:grid-cols-4 gap-8">
-            {benefits.map((benefit, index) => (
-              <Card key={index} className="text-center">
-                <CardContent className="p-6">
-                  <benefit.icon className="h-12 w-12 text-purple-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">{benefit.title}</h3>
-                  <p className="text-gray-600">{benefit.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+        <section className="mb-12">
+          <h2 className="text-2xl font-semibold mb-4">Open Positions</h2>
+          <div className="space-y-4">
+            <JobCard
+              title="Senior Frontend Engineer"
+              department="Engineering"
+              location="Remote"
+              type="Full-time"
+            />
+            <JobCard
+              title="Product Designer"
+              department="Design"
+              location="Remote"
+              type="Full-time"
+            />
+            <JobCard
+              title="Community Manager"
+              department="Operations"
+              location="Remote"
+              type="Full-time"
+            />
           </div>
-        </div>
-
-        {/* Open Positions */}
-        <div>
-          <h2 className="text-3xl font-bold text-center mb-12">Open Positions</h2>
-          <div className="space-y-8">
-            {positions.map((department, index) => (
-              <div key={index}>
-                <h3 className="text-2xl font-semibold mb-6">{department.department}</h3>
-                <div className="grid md:grid-cols-2 gap-6">
-                  {department.roles.map((role, roleIndex) => (
-                    <Card key={roleIndex} className="hover:shadow-lg transition-all duration-300">
-                      <CardContent className="p-6">
-                        <h4 className="text-xl font-semibold mb-2">{role.title}</h4>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-                          <span>{role.location}</span>
-                          <span>•</span>
-                          <span>{role.type}</span>
-                        </div>
-                        <p className="text-gray-600 mb-6">{role.description}</p>
-                        <Button onClick={() => handleApply(role.title)}>Apply Now</Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Application Modal */}
-        <Dialog open={showApplyModal} onOpenChange={setShowApplyModal}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Apply for {selectedPosition}</DialogTitle>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={applicationForm.name}
-                  onChange={(e) => setApplicationForm(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={applicationForm.email}
-                  onChange={(e) => setApplicationForm(prev => ({ ...prev, email: e.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="resume">Resume URL</Label>
-                <Input
-                  id="resume"
-                  type="url"
-                  value={applicationForm.resume}
-                  onChange={(e) => setApplicationForm(prev => ({ ...prev, resume: e.target.value }))}
-                  placeholder="Link to your resume (Google Drive, Dropbox, etc.)"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="coverLetter">Cover Letter (Optional)</Label>
-                <Textarea
-                  id="coverLetter"
-                  value={applicationForm.coverLetter}
-                  onChange={(e) => setApplicationForm(prev => ({ ...prev, coverLetter: e.target.value }))}
-                  placeholder="Tell us why you're interested in this position..."
-                  className="h-32"
-                />
-              </div>
-
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded-md">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowApplyModal(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? <LoadingSpinner className="mr-2" /> : null}
-                  Submit Application
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        </section>
       </div>
+
+      {/* Application Modal */}
+      <Dialog open={showApplyModal} onOpenChange={setShowApplyModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Apply for {selectedPosition}</DialogTitle>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                value={applicationForm.name}
+                onChange={(e) => setApplicationForm(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={applicationForm.email}
+                onChange={(e) => setApplicationForm(prev => ({ ...prev, email: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="resume">Resume URL</Label>
+              <Input
+                id="resume"
+                type="url"
+                value={applicationForm.resume}
+                onChange={(e) => setApplicationForm(prev => ({ ...prev, resume: e.target.value }))}
+                placeholder="Link to your resume (Google Drive, Dropbox, etc.)"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="coverLetter">Cover Letter (Optional)</Label>
+              <Textarea
+                id="coverLetter"
+                value={applicationForm.coverLetter}
+                onChange={(e) => setApplicationForm(prev => ({ ...prev, coverLetter: e.target.value }))}
+                placeholder="Tell us why you're interested in this position..."
+                className="h-32"
+              />
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 p-2 rounded-md">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setShowApplyModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <LoadingSpinner className="mr-2" /> : null}
+                Submit Application
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function BenefitCard({ 
+  icon, 
+  title, 
+  description 
+}: { 
+  icon: string
+  title: string
+  description: string
+}) {
+  return (
+    <div className="p-6 border rounded-lg text-center">
+      <div className="text-4xl mb-4">{icon}</div>
+      <h3 className="font-semibold mb-2">{title}</h3>
+      <p className="text-gray-600">{description}</p>
+    </div>
+  )
+}
+
+function JobCard({ 
+  title, 
+  department, 
+  location, 
+  type 
+}: { 
+  title: string
+  department: string
+  location: string
+  type: string
+}) {
+  return (
+    <div className="p-6 border rounded-lg hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start">
+        <div>
+          <h3 className="font-semibold text-lg mb-2">{title}</h3>
+          <p className="text-gray-600">{department}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-gray-600">{location}</p>
+          <p className="text-gray-600">{type}</p>
+        </div>
+      </div>
+      <button className="mt-4 text-pink-500 font-semibold hover:text-pink-600">
+        View Details →
+      </button>
     </div>
   )
 } 

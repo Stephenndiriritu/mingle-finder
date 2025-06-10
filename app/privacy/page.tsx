@@ -21,11 +21,10 @@ export default function PrivacyPolicyPage() {
             <h2>1. Information We Collect</h2>
             <p>We collect information that you provide directly to us, including:</p>
             <ul>
-              <li>Name, email address, and date of birth</li>
+              <li>Name, email address, and other contact information</li>
               <li>Profile information and photos</li>
-              <li>Location data</li>
-              <li>Messages and communication with other users</li>
-              <li>Survey responses and feedback</li>
+              <li>Communication preferences</li>
+              <li>Payment information</li>
             </ul>
           </div>
 
@@ -34,10 +33,9 @@ export default function PrivacyPolicyPage() {
             <p>We use the information we collect to:</p>
             <ul>
               <li>Provide and improve our services</li>
-              <li>Match you with compatible users</li>
-              <li>Send you updates and promotional materials</li>
-              <li>Ensure platform safety and security</li>
-              <li>Comply with legal obligations</li>
+              <li>Match you with potential partners</li>
+              <li>Process your payments</li>
+              <li>Send you updates and marketing communications</li>
             </ul>
           </div>
 

@@ -1,62 +1,96 @@
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { Redis } from "@upstash/redis"
 
-interface TokenBucket {
-  tokens: number
-  lastRefill: number
+// Initialize Redis client if REDIS_URL is available
+const redis = process.env.REDIS_URL 
+  ? new Redis({ url: process.env.REDIS_URL })
+  : null
+
+// In-memory store for development or when Redis is not available
+const inMemoryStore: Record<string, { count: number, reset: number }> = {}
+
+interface RateLimitOptions {
+  limit: number
+  window: number // in seconds
+  identifier?: string
 }
 
-export interface RateLimitOptions {
-  tokensPerInterval: number
-  interval: number // in milliseconds
-}
-
-const defaultOptions: RateLimitOptions = {
-  tokensPerInterval: 10, // 10 requests
-  interval: 60 * 1000, // per minute
-}
-
-// Use Map instead of LRUCache for simplicity
-const tokenBuckets = new Map<string, TokenBucket>()
-
-// Clean up old entries every hour
-setInterval(() => {
+export async function rateLimit(
+  request: NextRequest,
+  options: RateLimitOptions
+) {
+  const { limit, window } = options
+  
+  // Get client IP or custom identifier
+  const identifier = options.identifier || 
+    request.ip || 
+    request.headers.get("x-forwarded-for") || 
+    "anonymous"
+    
+  const key = `ratelimit:${identifier}:${request.nextUrl.pathname}`
   const now = Date.now()
-  for (const [key, bucket] of tokenBuckets.entries()) {
-    if (now - bucket.lastRefill > defaultOptions.interval * 2) {
-      tokenBuckets.delete(key)
+  const windowMs = window * 1000
+  const reset = now + windowMs
+  
+  let currentLimit: { count: number, reset: number }
+  
+  // Use Redis if available
+  if (redis) {
+    const result = await redis.get(key) as { count: number, reset: number } | null
+    
+    if (result) {
+      currentLimit = result
+    } else {
+      currentLimit = { count: 0, reset }
+      await redis.set(key, currentLimit, { ex: window })
+    }
+    
+    // Increment count
+    currentLimit.count += 1
+    await redis.set(key, currentLimit, { ex: window })
+  } 
+  // Use in-memory store
+  else {
+    if (inMemoryStore[key] && inMemoryStore[key].reset > now) {
+      currentLimit = inMemoryStore[key]
+      currentLimit.count += 1
+    } else {
+      currentLimit = { count: 1, reset }
+    }
+    
+    inMemoryStore[key] = currentLimit
+    
+    // Clean up expired entries occasionally
+    if (Math.random() < 0.01) {
+      for (const key in inMemoryStore) {
+        if (inMemoryStore[key].reset <= now) {
+          delete inMemoryStore[key]
+        }
+      }
     }
   }
-}, 60 * 60 * 1000)
-
-export function rateLimit(options: RateLimitOptions = defaultOptions) {
-  return {
-    check: (req: NextRequest, token: string): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const now = Date.now()
-        let bucket = tokenBuckets.get(token)
-
-        if (!bucket) {
-          // Initialize new bucket
-          bucket = {
-            tokens: options.tokensPerInterval,
-            lastRefill: now,
-          }
-        } else {
-          // Refill tokens based on time elapsed
-          const timePassed = now - bucket.lastRefill
-          const refillAmount = Math.floor(timePassed / options.interval) * options.tokensPerInterval
-          bucket.tokens = Math.min(options.tokensPerInterval, bucket.tokens + refillAmount)
-          bucket.lastRefill = now
-        }
-
-        if (bucket.tokens > 0) {
-          bucket.tokens--
-          tokenBuckets.set(token, bucket)
-          resolve()
-        } else {
-          reject(new Error('Rate limit exceeded'))
-        }
-      })
-    }
+  
+  // Set rate limit headers
+  const headers = {
+    "X-RateLimit-Limit": limit.toString(),
+    "X-RateLimit-Remaining": Math.max(0, limit - currentLimit.count).toString(),
+    "X-RateLimit-Reset": new Date(currentLimit.reset).toISOString()
   }
+  
+  // If limit is exceeded, return 429 Too Many Requests
+  if (currentLimit.count > limit) {
+    return NextResponse.json(
+      { error: "Too many requests, please try again later." },
+      { 
+        status: 429, 
+        headers: {
+          ...headers,
+          "Retry-After": Math.ceil((currentLimit.reset - now) / 1000).toString()
+        }
+      }
+    )
+  }
+  
+  // Otherwise, return null to continue processing the request
+  return null
 } 
