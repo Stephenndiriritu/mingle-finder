@@ -12,7 +12,9 @@
     "schema": "tsx scripts/run-schema.ts",
     "create-test-users": "tsx scripts/create-test-users.ts",
     "add-admin-column": "tsx scripts/add-admin-column.ts",
-    "seed": "tsx scripts/seed-database.ts"
+    "seed": "tsx scripts/seed-database.ts",
+    "reset-db": "tsx scripts/reset-database.ts",
+    "inspect-db": "tsx scripts/inspect-database.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

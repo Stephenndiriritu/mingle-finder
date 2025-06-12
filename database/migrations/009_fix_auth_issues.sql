@@ -1,32 +1,53 @@
--- Fix profiles table constraints
-ALTER TABLE profiles ALTER COLUMN first_name DROP NOT NULL;
-ALTER TABLE profiles DROP COLUMN IF EXISTS first_name;
-ALTER TABLE profiles DROP COLUMN IF EXISTS last_name;
-
 -- Add is_admin column to users if it doesn't exist
-DO $$ 
+DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 
-    FROM information_schema.columns 
-    WHERE table_name = 'users' 
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'users'
     AND column_name = 'is_admin'
   ) THEN
     ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
   END IF;
 END $$;
 
--- Update profiles to use name from users table
+-- Add display_name column to profiles if it doesn't exist
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
-UPDATE profiles p 
-SET display_name = u.name 
-FROM users u 
-WHERE p.user_id = u.id 
-AND p.display_name IS NULL;
 
--- Ensure all users have profiles
+-- Safely update display_name using existing columns if they exist
+DO $$
+BEGIN
+  -- Check if first_name column exists and update display_name accordingly
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'profiles'
+    AND column_name = 'first_name'
+  ) THEN
+    -- Update display_name from existing first_name and last_name
+    UPDATE profiles
+    SET display_name = COALESCE(
+      CASE
+        WHEN first_name IS NOT NULL AND last_name IS NOT NULL THEN first_name || ' ' || last_name
+        WHEN first_name IS NOT NULL THEN first_name
+        ELSE 'User'
+      END
+    )
+    WHERE display_name IS NULL OR display_name = '';
+
+    -- Make first_name nullable since we're using display_name
+    ALTER TABLE profiles ALTER COLUMN first_name DROP NOT NULL;
+  ELSE
+    -- If first_name doesn't exist, just set default display_name
+    UPDATE profiles
+    SET display_name = 'User'
+    WHERE display_name IS NULL OR display_name = '';
+  END IF;
+END $$;
+
+-- Ensure all users have profiles with a default display_name
 INSERT INTO profiles (user_id, display_name)
-SELECT u.id, u.name
+SELECT u.id, 'User'
 FROM users u
 LEFT JOIN profiles p ON p.user_id = u.id
 WHERE p.id IS NULL;
