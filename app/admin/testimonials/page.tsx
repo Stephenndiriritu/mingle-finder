@@ -127,7 +127,7 @@ export default function AdminTestimonialsPage() {
                       {testimonial.user_name}
                     </h3>
                     <Badge
-                      variant={testimonial.is_approved ? "success" : "secondary"}
+                      variant={testimonial.is_approved ? "default" : "secondary"}
                     >
                       {testimonial.is_approved ? "Approved" : "Pending"}
                     </Badge>
