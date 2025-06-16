@@ -14,7 +14,7 @@ import Link from 'next/link'
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
-  const [profile, setProfile] = useState(null)
+  const [profile, setProfile] = useState<any>(null)
   const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function ProfilePage() {
     if (user) {
       // For now, use mock profile data
       // TODO: Fetch real profile data from API
-      setProfile({
+      const mockProfile = {
         id: user.id,
         userId: user.id,
         firstName: user.name?.split(' ')[0] || 'Test',
@@ -55,7 +55,8 @@ export default function ProfilePage() {
         profileCompletionPercentage: 75,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      })
+      }
+      setProfile(mockProfile)
       setProfileLoading(false)
     }
   }, [user, isLoading, router])
@@ -154,7 +155,7 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      <ProfileForm initialData={profile} userId={user.id} />
+      {profile && <ProfileForm initialData={profile} userId={user.id} />}
     </div>
   )
 }

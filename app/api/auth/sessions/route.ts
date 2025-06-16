@@ -4,7 +4,7 @@ import { getUserFromRequest } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -68,7 +68,7 @@ export async function DELETE(request: NextRequest) {
 // Terminate all other sessions
 export async function PUT(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

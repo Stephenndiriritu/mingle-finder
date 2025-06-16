@@ -11,13 +11,22 @@ import { BarChart, LineChart } from "@/components/charts"
 interface AdminStats {
   totalUsers: number
   activeUsers: number
+  activeUsers7d?: number
   totalMatches: number
+  matches24h?: number
   premiumUsers: number
+  verifiedUsers?: number
+  totalMessages?: number
+  messages24h?: number
+  conversionRate?: number
+  verificationRate?: number
+  newUsers30d?: number
   pendingReports: number
   dailyActivity: { date: string; new_users: number }[]
   subscriptions: { subscription_type: string; count: number }[]
   topLocations: { location: string; user_count: number }[]
   ageDistribution: { age_group: string; count: number }[]
+  error?: string
 }
 
 export default function AdminDashboard() {

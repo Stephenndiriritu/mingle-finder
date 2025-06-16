@@ -5,7 +5,8 @@ import { type User } from './auth'
 const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 export async function getAuthToken(): Promise<string | undefined> {
-  return cookies().get('auth-token')?.value
+  const cookieStore = await cookies()
+  return cookieStore.get('auth-token')?.value
 }
 
 export async function verifyEdgeToken(token: string): Promise<any> {

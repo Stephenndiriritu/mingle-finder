@@ -17,7 +17,7 @@ interface TypingData {
 
 export function useSocket() {
   const { user } = useAuth()
-  const socketRef = useRef<Socket>()
+  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
     if (user) {

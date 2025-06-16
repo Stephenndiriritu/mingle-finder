@@ -292,7 +292,7 @@ export default function DiscoverPage() {
       )}
 
       {/* Premium Upgrade Prompt */}
-      {user?.subscription_type === "free" && (
+      {user?.subscriptionType === "free" && (
         <Card className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
           <CardContent className="p-4 text-center">
             <Star className="h-8 w-8 text-yellow-500 mx-auto mb-2" />

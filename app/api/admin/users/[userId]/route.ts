@@ -1,10 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
+
     const { userId: userIdParam } = await params
     const userId = Number.parseInt(userIdParam)
 
@@ -68,7 +73,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     })
   } catch (error) {
     console.error("Admin get user error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -77,8 +82,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
+
     const { userId: userIdParam } = await params
     const userId = Number.parseInt(userIdParam)
 
@@ -126,7 +135,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     })
   } catch (error) {
     console.error("Admin update user error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -135,8 +144,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
+
     const { userId: userIdParam } = await params
     const userId = Number.parseInt(userIdParam)
 
@@ -145,7 +158,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // Prevent admin from deleting themselves
-    if (userId === admin.id) {
+    if (userId.toString() === admin.id) {
       return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 })
     }
 
@@ -175,7 +188,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return NextResponse.json({ message: "User deleted successfully" })
   } catch (error) {
     console.error("Admin delete user error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,30 +1,33 @@
-import { withCache, invalidateCache } from '@/middleware/cache'
-import { rateLimit } from '@/middleware/rate-limit'
+import { NextRequest, NextResponse } from 'next/server'
+import pool from '@/lib/db'
+import { getUserFromRequest } from '@/lib/auth'
 
-export const GET = withCache(async (req: NextRequest) => {
-  // Check rate limit
-  const rateLimitResult = await rateLimit(req)
-  if (rateLimitResult) return rateLimitResult
+export async function GET(req: NextRequest) {
+  try {
+    // Get all users with basic info
+    const users = await pool.query('SELECT id, name, created_at FROM users WHERE is_active = true LIMIT 100')
 
-  // Your API logic here
-  const users = await db.query('SELECT * FROM users')
-  
-  return NextResponse.json(users)
-}, {
-  ttl: 300, // Cache for 5 minutes
-  tags: ['users']
-})
+    return NextResponse.json({ users: users.rows })
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
+  }
+}
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
-  const rateLimitResult = await rateLimit(req)
-  if (rateLimitResult) return rateLimitResult
+  try {
+    const user = await getUserFromRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  // Your POST logic here
-  const user = await db.query('INSERT INTO users...')
-  
-  // Invalidate users cache
-  await invalidateCache(['users'])
-  
-  return NextResponse.json(user)
-} 
+    const body = await req.json()
+
+    // Create new user logic would go here
+    // For now, return success
+    return NextResponse.json({ message: 'User creation not implemented yet' }, { status: 501 })
+  } catch (error) {
+    console.error('Error creating user:', error)
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
+  }
+}

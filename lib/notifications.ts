@@ -1,5 +1,5 @@
 import pool from "@/lib/db"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, sendMatchNotificationEmail, sendMessageNotificationEmail } from "@/lib/email"
 
 /**
  * Send a notification for a new message
@@ -46,20 +46,15 @@ export async function sendMessageNotification(
     
     // Send email notification if enabled
     if (notificationPrefs.email_messages !== false) {
-      const truncatedMessage = message.length > 50 
-        ? message.substring(0, 47) + '...' 
+      const truncatedMessage = message.length > 100
+        ? message.substring(0, 97) + '...'
         : message
-        
-      await sendEmail({
-        to: userInfo.receiver_email,
-        subject: `New message from ${userInfo.sender_name}`,
-        html: `
-          <h1>You have a new message</h1>
-          <p><strong>${userInfo.sender_name}</strong> sent you a message:</p>
-          <p style="padding: 10px; background-color: #f5f5f5; border-radius: 5px;">${truncatedMessage}</p>
-          <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/app/messages/${matchId}">Click here to reply</a></p>
-        `
-      })
+
+      await sendMessageNotificationEmail(
+        userInfo.receiver_email,
+        userInfo.sender_name,
+        truncatedMessage
+      )
     }
     
     // Send push notification if enabled (implementation depends on your push service)

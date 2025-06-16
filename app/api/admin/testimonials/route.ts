@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
 
     console.log('Fetching testimonials from database...')
 
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Admin get testimonials error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -88,8 +92,11 @@ export async function GET(request: NextRequest) {
 // Update testimonial status (approve/reject/feature)
 export async function PATCH(req: NextRequest) {
   try {
-    // TODO: Add proper admin authentication check
-    // const user = requireAdmin(req)
+    // Check admin authentication
+    const admin = await getUserFromRequest(req)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
 
     const { id, is_approved, is_featured } = await req.json()
 
@@ -122,8 +129,11 @@ export async function PATCH(req: NextRequest) {
 // Delete testimonial
 export async function DELETE(req: NextRequest) {
   try {
-    // TODO: Add proper admin authentication check
-    // const user = requireAdmin(req)
+    // Check admin authentication
+    const admin = await getUserFromRequest(req)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")

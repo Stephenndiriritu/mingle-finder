@@ -7,7 +7,7 @@ import QRCode from "qrcode"
 // Enable 2FA
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 // Verify and activate 2FA
 export async function PUT(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest) {
 // Disable 2FA
 export async function DELETE(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

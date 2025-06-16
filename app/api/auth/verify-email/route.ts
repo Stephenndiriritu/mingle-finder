@@ -35,16 +35,20 @@ export async function POST(request: NextRequest) {
 
     // Send verification email
     const verifyUrl = `${process.env.NEXTAUTH_URL}/verify-email?token=${verificationToken}`
-    await sendEmail({
-      to: session.user.email,
-      subject: "Verify your email",
-      html: `
+    // For now, we'll need to get the user email from the request
+    // TODO: Implement proper user authentication
+    const { email: userEmail } = await request.json()
+
+    await sendEmail(
+      userEmail,
+      "Verify your email",
+      `
         <h1>Verify your email address</h1>
         <p>Click the link below to verify your email:</p>
         <a href="${verifyUrl}">${verifyUrl}</a>
         <p>This link will expire in 24 hours.</p>
       `
-    })
+    )
 
     return NextResponse.json({ message: "Verification email sent" })
   } catch (error) {

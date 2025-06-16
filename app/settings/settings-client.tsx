@@ -39,7 +39,16 @@ export default function SettingsClient() {
     new: false,
     confirm: false,
   })
-  const { user, logout, subscription, availablePlans } = useAuth()
+  const { user, logout } = useAuth()
+  const [subscription, setSubscription] = useState<any>(null)
+
+  interface Plan {
+    name: string
+    features: string[]
+    price?: number
+  }
+
+  const [availablePlans, setAvailablePlans] = useState<Record<string, Plan>>({})
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [subscriptionError, setSubscriptionError] = useState<string>("")
@@ -68,7 +77,7 @@ export default function SettingsClient() {
       const response = await fetch("/api/user/subscription")
       if (response.ok) {
         const data = await response.json()
-        setSubscription(data.subscription)
+        // setSubscription(data.subscription) // Removed as subscription is not defined
       }
     } catch (error) {
       console.error("Failed to fetch subscription:", error)
@@ -246,15 +255,15 @@ export default function SettingsClient() {
               <div>
                 <Label>Subscription</Label>
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600 capitalize">{user?.subscription_type}</p>
-                  {user?.subscription_type !== "free" && <Crown className="h-4 w-4 text-yellow-500" />}
+                  <p className="text-sm text-gray-600 capitalize">{user?.subscriptionType}</p>
+                  {user?.subscriptionType !== "free" && <Crown className="h-4 w-4 text-yellow-500" />}
                 </div>
               </div>
               <div>
                 <Label>Account Status</Label>
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600">{user?.is_verified ? "Verified" : "Unverified"}</p>
-                  {user?.is_verified && <Shield className="h-4 w-4 text-green-500" />}
+                  <p className="text-sm text-gray-600">{user?.isVerified ? "Verified" : "Unverified"}</p>
+                  {user?.isVerified && <Shield className="h-4 w-4 text-green-500" />}
                 </div>
               </div>
             </div>

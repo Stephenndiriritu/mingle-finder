@@ -118,11 +118,11 @@ export default function PremiumPage() {
       </div>
 
       {/* Current Plan Status */}
-      {user?.subscription_type !== "free" && (
+      {user?.subscriptionType !== "free" && (
         <Card className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
           <CardContent className="p-6 text-center">
             <Crown className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">You're on {user.subscription_type} Plan</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">You're on {user?.subscriptionType} Plan</h2>
             <p className="text-gray-600">Enjoying premium features? Thank you for being a valued member!</p>
           </CardContent>
         </Card>
@@ -148,8 +148,8 @@ export default function PremiumPage() {
                 </div>
               ))}
               <div className="pt-4">
-                <Button variant="outline" className="w-full" disabled={user?.subscription_type === "free"}>
-                  {user?.subscription_type === "free" ? "Current Plan" : "Downgrade"}
+                <Button variant="outline" className="w-full" disabled={user?.subscriptionType === "free"}>
+                  {user?.subscriptionType === "free" ? "Current Plan" : "Downgrade"}
                 </Button>
               </div>
             </CardContent>
@@ -187,11 +187,11 @@ export default function PremiumPage() {
                   <Button
                     className={`w-full bg-gradient-to-r ${plan.color} hover:opacity-90`}
                     onClick={() => handleSubscribe(plan.id)}
-                    disabled={isLoading || user?.subscription_type === plan.id}
+                    disabled={isLoading || user?.subscriptionType === plan.id}
                   >
                     {isLoading && selectedPlan === plan.id
                       ? "Processing..."
-                      : user?.subscription_type === plan.id
+                      : user?.subscriptionType === plan.id
                         ? "Current Plan"
                         : `Upgrade to ${plan.name}`}
                   </Button>

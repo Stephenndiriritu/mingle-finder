@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
+    const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -108,16 +108,16 @@ export async function POST(request: NextRequest) {
 
     // Send email with download link
     const downloadUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/user/data-export/${exportId}/download`
-    await sendEmail({
-      to: user.email,
-      subject: "Your data export is ready",
-      html: `
+    await sendEmail(
+      user.email,
+      "Your data export is ready",
+      `
         <h1>Your data export is ready</h1>
         <p>Click the link below to download your data:</p>
         <a href="${downloadUrl}">${downloadUrl}</a>
         <p>This link will expire in 24 hours.</p>
-      `,
-    })
+      `
+    )
 
     // Save export record
     await pool.query(

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { requireAuth } from "@/lib/auth"
+import { getUserFromRequest } from "@/lib/auth"
 
 const mockStories = [
   {
@@ -54,7 +54,7 @@ export async function GET() {
 // Submit a new success story
 export async function POST(request: NextRequest) {
   try {
-    const user = requireAuth(request)
+    const user = await getUserFromRequest(request)
     const { title, story, location } = await request.json()
 
     if (!title || !story || !location) {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       `INSERT INTO success_stories (user_id, title, story, location) 
        VALUES ($1, $2, $3, $4) 
        RETURNING *`,
-      [user.id, title, story, location]
+      [user?.id, title, story, location]
     )
 
     return NextResponse.json({

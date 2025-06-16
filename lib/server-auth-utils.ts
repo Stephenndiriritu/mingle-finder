@@ -1,11 +1,16 @@
 import bcrypt from 'bcryptjs'
-import jwt, { Secret, SignOptions } from 'jsonwebtoken'
+import jwt, { Secret, SignOptions, JwtPayload } from 'jsonwebtoken'
 import config from './config'
 import { cookies } from 'next/headers'
 import { type User } from './auth'
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET!
 const TOKEN_EXPIRY = '7d'
+
+interface JWTPayload extends JwtPayload {
+  userId: string
+  email: string
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10)
@@ -50,8 +55,9 @@ export function verifyToken(token: string): JWTPayload | null {
   }
 }
 
-export function setAuthCookie(token: string) {
-  cookies().set('auth-token', token, {
+export async function setAuthCookie(token: string) {
+  const cookieStore = await cookies()
+  cookieStore.set('auth-token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -59,12 +65,14 @@ export function setAuthCookie(token: string) {
   })
 }
 
-export function clearAuthCookie() {
-  cookies().delete('auth-token')
+export async function clearAuthCookie() {
+  const cookieStore = await cookies()
+  cookieStore.delete('auth-token')
 }
 
-export function getAuthToken(): string | undefined {
-  return cookies().get('auth-token')?.value
+export async function getAuthToken(): Promise<string | undefined> {
+  const cookieStore = await cookies()
+  return cookieStore.get('auth-token')?.value
 }
 
 export async function validateSession(): Promise<User | null> {

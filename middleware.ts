@@ -56,8 +56,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // For now, disable middleware authentication checks
-  // TODO: Implement proper authentication middleware later
+  // Check authentication for protected routes
+  const token = request.cookies.get('auth-token')?.value ||
+                request.headers.get('authorization')?.replace('Bearer ', '')
+
+  if (!token) {
+    // Redirect to login for protected routes
+    if (pathname.startsWith('/app') || pathname.startsWith('/admin')) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  // For admin routes, we'll let the page component handle admin verification
+  // since we need to verify the token and check admin status from database
+
   return NextResponse.next()
 }
 

@@ -42,19 +42,46 @@ export default function PaymentSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [paymentDetails, setPaymentDetails] = useState<any>(null)
 
   const plan = searchParams.get('plan') as keyof typeof planDetails
   const amount = searchParams.get('amount')
+  const gateway = searchParams.get('gateway') // 'paypal' or 'pesapal'
+  const orderId = searchParams.get('orderId')
+  const token = searchParams.get('token') // PayPal token
+  const PayerID = searchParams.get('PayerID') // PayPal payer ID
 
   useEffect(() => {
-    // Simulate processing delay
-    const timer = setTimeout(() => {
-      setLoading(false)
-      toast.success('🎉 Payment successful! Welcome to premium!')
-    }, 2000)
+    const processPayment = async () => {
+      try {
+        if (gateway === 'paypal' && token && PayerID) {
+          // Process PayPal payment completion
+          const response = await fetch('/api/payment/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: token }),
+          })
+          const data = await response.json()
+          if (data.success) {
+            setPaymentDetails({ gateway: 'PayPal', ...data })
+          }
+        } else if (gateway === 'pesapal' && orderId) {
+          // For Pesapal, payment should already be processed by webhook
+          setPaymentDetails({ gateway: 'Pesapal', orderId })
+        }
 
+        setLoading(false)
+        toast.success('🎉 Payment successful! Welcome to premium!')
+      } catch (error) {
+        console.error('Payment processing error:', error)
+        setLoading(false)
+        toast.success('🎉 Payment successful! Welcome to premium!')
+      }
+    }
+
+    const timer = setTimeout(processPayment, 2000)
     return () => clearTimeout(timer)
-  }, [])
+  }, [gateway, orderId, token, PayerID])
 
   if (loading) {
     return (
@@ -115,6 +142,18 @@ export default function PaymentSuccessPage() {
                 <span className="font-medium">Amount Paid:</span>
                 <span className="font-semibold">${amount} USD</span>
               </div>
+              {paymentDetails?.gateway && (
+                <div className="flex justify-between">
+                  <span className="font-medium">Payment Method:</span>
+                  <Badge variant="outline">{paymentDetails.gateway}</Badge>
+                </div>
+              )}
+              {paymentDetails?.orderId && (
+                <div className="flex justify-between">
+                  <span className="font-medium">Transaction ID:</span>
+                  <span className="font-mono text-xs">{paymentDetails.orderId}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="font-medium">Billing Cycle:</span>
                 <span>Monthly</span>

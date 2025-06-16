@@ -1,20 +1,13 @@
 import { redirect } from "next/navigation"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import pool from "@/lib/db"
 
 export default async function VerifyEmailPage({
   searchParams
 }: {
-  searchParams: { token: string }
+  searchParams: Promise<{ token: string }>
 }) {
-  const session = await getServerSession(authOptions)
-  
-  if (!session) {
-    redirect("/login")
-  }
-
-  if (!searchParams.token) {
+  const params = await searchParams
+  if (!params.token) {
     redirect("/app")
   }
 
@@ -22,7 +15,7 @@ export default async function VerifyEmailPage({
     const response = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/verify-email`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: searchParams.token })
+      body: JSON.stringify({ token: params.token })
     })
 
     if (!response.ok) {

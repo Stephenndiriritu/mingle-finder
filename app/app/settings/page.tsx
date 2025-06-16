@@ -38,7 +38,7 @@ export default function SettingsPage() {
     new: false,
     confirm: false,
   })
-  const { user, logout, subscription, availablePlans } = useAuth()
+  const { user, logout } = useAuth()
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
 
@@ -68,7 +68,7 @@ export default function SettingsPage() {
         const data = await response.json()
         // Assuming data.subscription is the subscription object
         // You might want to update this to match your actual data structure
-        setSubscription(data.subscription)
+        // setSubscription(data.subscription) // Remove this line as subscription is not defined
       }
     } catch (error) {
       console.error("Failed to fetch subscription:", error)
@@ -187,7 +187,7 @@ export default function SettingsPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setSubscription(data.subscription)
+        // setSubscription(data.subscription) // Remove this line as subscription is not defined
         alert("Subscription action handled successfully")
       } else {
         alert("Failed to handle subscription action")
@@ -237,15 +237,15 @@ export default function SettingsPage() {
               <div>
                 <Label>Subscription</Label>
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600 capitalize">{user?.subscription_type}</p>
-                  {user?.subscription_type !== "free" && <Crown className="h-4 w-4 text-yellow-500" />}
+                  <p className="text-sm text-gray-600 capitalize">{user?.subscriptionType}</p>
+                  {user?.subscriptionType !== "free" && <Crown className="h-4 w-4 text-yellow-500" />}
                 </div>
               </div>
               <div>
                 <Label>Account Status</Label>
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600">{user?.is_verified ? "Verified" : "Unverified"}</p>
-                  {user?.is_verified && <Shield className="h-4 w-4 text-green-500" />}
+                  <p className="text-sm text-gray-600">{user?.isVerified ? "Verified" : "Unverified"}</p>
+                  {user?.isVerified && <Shield className="h-4 w-4 text-green-500" />}
                 </div>
               </div>
             </div>
@@ -490,15 +490,10 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <p className="font-medium">
-                      Current Plan: {subscription?.type.charAt(0).toUpperCase() + subscription?.type.slice(1)}
+                      Current Plan: {user?.subscriptionType ? user.subscriptionType.charAt(0).toUpperCase() + user.subscriptionType.slice(1) : 'Free'}
                     </p>
-                    {subscription?.expires_at && (
-                      <p className="text-sm text-muted-foreground">
-                        Expires on {new Date(subscription.expires_at).toLocaleDateString()}
-                      </p>
-                    )}
                   </div>
-                  {subscription?.type !== "free" && (
+                  {user?.subscriptionType !== "free" && (
                     <Button
                       variant="outline"
                       onClick={() => handleSubscriptionAction("cancel")}
@@ -516,34 +511,38 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {subscription?.type === "free" && (
+                {user?.subscriptionType === "free" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {Object.entries(availablePlans).map(([planId, plan]) => (
-                      <Card key={planId}>
-                        <CardHeader>
-                          <CardTitle>{plan.name}</CardTitle>
-                          <CardDescription>
-                            Unlock premium features and enhance your experience
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <ul className="space-y-2 mb-4">
-                            {plan.features.map((feature, index) => (
-                              <li key={index} className="flex items-center text-sm">
-                                <Check className="h-4 w-4 mr-2 text-green-500" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                          <Button
-                            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500"
-                            onClick={() => handleUpgradeClick(planId)}
-                          >
-                            Choose {plan.name}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Premium Plan</CardTitle>
+                        <CardDescription>
+                          Unlock premium features and enhance your experience
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2 mb-4">
+                          <li className="flex items-center text-sm">
+                            <Check className="h-4 w-4 mr-2 text-green-500" />
+                            Unlimited messaging
+                          </li>
+                          <li className="flex items-center text-sm">
+                            <Check className="h-4 w-4 mr-2 text-green-500" />
+                            See who likes you
+                          </li>
+                          <li className="flex items-center text-sm">
+                            <Check className="h-4 w-4 mr-2 text-green-500" />
+                            Advanced filters
+                          </li>
+                        </ul>
+                        <Button
+                          className="w-full bg-gradient-to-r from-yellow-500 to-orange-500"
+                          onClick={() => handleUpgradeClick("premium")}
+                        >
+                          Choose Premium
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
               </>

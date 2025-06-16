@@ -1,156 +1,57 @@
 import { NextResponse } from "next/server"
 import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 
-// Mock data for testing - formatted to match discover page expectations
-const mockProfiles = [
-  {
-    id: "1",
-    firstName: "Sarah",
-    lastName: "Johnson",
-    birthDate: "1995-06-15", // Age 28
-    bio: "Love hiking, coffee, and good conversations. Looking for someone genuine to explore life with.",
-    photos: ["/placeholder.svg?height=600&width=400"],
-    location: "New York, NY",
-    occupation: "Software Engineer",
-    interests: ["Hiking", "Coffee", "Photography", "Travel", "Books"],
-    subscriptionType: "premium_plus",
-    isVerified: true,
-    profileBoosts: 3,
-    lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-    profileViews: 245,
-    likesReceived: 89,
-    responseRate: 0.85,
-    rankingScore: 95
-  },
-  {
-    id: "2",
-    firstName: "Emma",
-    lastName: "Wilson",
-    birthDate: "1998-03-22", // Age 25
-    bio: "Artist and yoga instructor. Passionate about mindfulness and creativity.",
-    photos: ["/placeholder.svg?height=600&width=400"],
-    location: "Brooklyn, NY",
-    occupation: "Yoga Instructor",
-    interests: ["Yoga", "Art", "Meditation", "Nature", "Music"],
-    subscriptionType: "premium",
-    isVerified: true,
-    profileBoosts: 1,
-    lastActive: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
-    profileViews: 178,
-    likesReceived: 67,
-    responseRate: 0.92,
-    rankingScore: 88
-  },
-  {
-    id: "3",
-    firstName: "Jessica",
-    lastName: "Chen",
-    birthDate: "1993-11-08", // Age 30
-    bio: "Foodie and adventure seeker. Always up for trying new restaurants or planning the next trip.",
-    photos: ["/placeholder.svg?height=600&width=400"],
-    location: "Manhattan, NY",
-    occupation: "Marketing Manager",
-    interests: ["Food", "Travel", "Adventure", "Wine", "Cooking"],
-    subscriptionType: "premium",
-    isVerified: false,
-    profileBoosts: 0,
-    lastActive: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-    profileViews: 134,
-    likesReceived: 45,
-    responseRate: 0.78,
-    rankingScore: 75
-  },
-  {
-    id: "4",
-    firstName: "Alex",
-    lastName: "Rodriguez",
-    birthDate: "1992-09-14", // Age 31
-    bio: "Fitness enthusiast and entrepreneur. Love outdoor activities and building meaningful connections.",
-    photos: ["/placeholder.svg?height=600&width=400"],
-    location: "Queens, NY",
-    occupation: "Business Owner",
-    interests: ["Fitness", "Business", "Outdoor Sports", "Technology", "Networking"],
-    subscriptionType: "free",
-    isVerified: false,
-    profileBoosts: 0,
-    lastActive: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-    profileViews: 67,
-    likesReceived: 23,
-    responseRate: 0.65,
-    rankingScore: 45
-  },
-  {
-    id: "5",
-    firstName: "Maya",
-    lastName: "Patel",
-    birthDate: "1996-12-03", // Age 27
-    bio: "Doctor and book lover. Passionate about helping others and continuous learning.",
-    photos: ["/placeholder.svg?height=600&width=400"],
-    location: "Manhattan, NY",
-    occupation: "Doctor",
-    interests: ["Medicine", "Reading", "Volunteering", "Classical Music", "Science"],
-    subscriptionType: "free",
-    isVerified: false,
-    profileBoosts: 0,
-    lastActive: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
-    profileViews: 89,
-    likesReceived: 34,
-    responseRate: 0.71,
-    rankingScore: 52
-  }
-]
+// Helper function to calculate age from birthdate
+function calculateAge(birthDate: string): number {
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
 
-// Ranking algorithm that prioritizes premium users
-function calculateProfileRanking(profile: any): number {
-  let score = 0
-
-  // Subscription tier bonus (highest priority)
-  switch (profile.subscriptionType) {
-    case 'premium_plus':
-      score += 50 // Highest priority
-      break
-    case 'premium':
-      score += 30 // High priority
-      break
-    case 'free':
-      score += 0 // Base priority
-      break
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--
   }
 
-  // Verification bonus
-  if (profile.isVerified) {
-    score += 15
-  }
-
-  // Profile boosts (premium feature)
-  score += profile.profileBoosts * 5
-
-  // Activity recency (more recent = higher score)
-  const hoursAgo = (Date.now() - new Date(profile.lastActive).getTime()) / (1000 * 60 * 60)
-  if (hoursAgo < 1) score += 10
-  else if (hoursAgo < 6) score += 8
-  else if (hoursAgo < 24) score += 5
-  else if (hoursAgo < 72) score += 2
-
-  // Engagement metrics
-  score += Math.min(profile.profileViews / 10, 10) // Max 10 points from views
-  score += Math.min(profile.likesReceived / 5, 15) // Max 15 points from likes
-  score += profile.responseRate * 10 // Max 10 points from response rate
-
-  return Math.round(score)
+  return age
 }
 
+// Helper function to calculate ranking score
+function calculateRankingScore(profile: any): number {
+  let score = 50 // Base score
+
+  // Premium users get higher scores
+  if (profile.subscription_type === 'premium_plus') score += 30
+  else if (profile.subscription_type === 'premium') score += 20
+  else if (profile.subscription_type === 'gold') score += 15
+
+  // Verified users get bonus
+  if (profile.is_verified) score += 10
+
+  // Profile completion bonus
+  if (profile.profile_completion_percentage >= 80) score += 10
+  else if (profile.profile_completion_percentage >= 60) score += 5
+
+  // Recent activity bonus
+  const lastActive = new Date(profile.last_active)
+  const hoursAgo = (Date.now() - lastActive.getTime()) / (1000 * 60 * 60)
+  if (hoursAgo < 24) score += 5
+  else if (hoursAgo < 72) score += 2
+
+  return Math.min(score, 100) // Cap at 100
+}
 // Sort profiles by ranking (premium users first)
 function sortProfilesByRanking(profiles: any[]): any[] {
   return profiles
     .map(profile => ({
       ...profile,
-      rankingScore: calculateProfileRanking(profile)
+      rankingScore: calculateRankingScore(profile)
     }))
     .sort((a, b) => {
       // First sort by subscription tier
-      const tierOrder = { 'premium_plus': 3, 'premium': 2, 'free': 1 }
-      const tierDiff = tierOrder[b.subscriptionType as keyof typeof tierOrder] - tierOrder[a.subscriptionType as keyof typeof tierOrder]
+      const tierOrder = { 'premium_plus': 3, 'premium': 2, 'gold': 1.5, 'free': 1 }
+      const tierDiff = (tierOrder[b.subscriptionType as keyof typeof tierOrder] || 1) -
+                      (tierOrder[a.subscriptionType as keyof typeof tierOrder] || 1)
 
       if (tierDiff !== 0) return tierDiff
 
@@ -159,15 +60,84 @@ function sortProfilesByRanking(profiles: any[]): any[] {
     })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Apply ranking algorithm to prioritize premium users
-    const rankedProfiles = sortProfilesByRanking(mockProfiles)
+    const user = await getUserFromRequest(request as any)
 
-    console.log('Profile ranking applied:')
-    rankedProfiles.forEach(profile => {
-      console.log(`${profile.firstName} (${profile.subscriptionType}): Score ${profile.rankingScore}`)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Get profiles from database, excluding current user and already swiped users
+    const query = `
+      SELECT DISTINCT
+        u.id,
+        u.name,
+        u.subscription_type,
+        u.is_verified,
+        u.last_active,
+        u.location,
+        p.first_name,
+        p.last_name,
+        p.birth_date,
+        p.bio,
+        p.interests,
+        p.profile_picture_url,
+        p.profile_completion_percentage
+      FROM users u
+      LEFT JOIN profiles p ON u.id = p.user_id
+      WHERE u.id != $1
+        AND u.is_active = true
+        AND u.id NOT IN (
+          SELECT swiped_id FROM swipes WHERE swiper_id = $1
+        )
+        AND u.id NOT IN (
+          SELECT blocked_id FROM blocks WHERE blocker_id = $1
+        )
+        AND u.id NOT IN (
+          SELECT blocker_id FROM blocks WHERE blocked_id = $1
+        )
+      ORDER BY
+        CASE u.subscription_type
+          WHEN 'premium_plus' THEN 4
+          WHEN 'premium' THEN 3
+          WHEN 'gold' THEN 2
+          ELSE 1
+        END DESC,
+        u.is_verified DESC,
+        u.last_active DESC
+      LIMIT 20
+    `
+
+    const result = await pool.query(query, [user.id])
+
+    // Transform database results to match expected format
+    const profiles = result.rows.map(row => {
+      const profile = {
+        id: row.id,
+        firstName: row.first_name || row.name?.split(' ')[0] || 'User',
+        lastName: row.last_name || row.name?.split(' ')[1] || '',
+        birthDate: row.birth_date,
+        bio: row.bio || 'No bio available',
+        photos: row.profile_picture_url ? [row.profile_picture_url] : ["/placeholder.svg?height=600&width=400"],
+        location: row.location || 'Location not specified',
+        interests: row.interests || [],
+        subscriptionType: row.subscription_type || 'free',
+        isVerified: row.is_verified || false,
+        lastActive: row.last_active,
+        profileCompletion: row.profile_completion_percentage || 0
+      }
+
+      return {
+        ...profile,
+        rankingScore: calculateRankingScore(profile)
+      }
     })
+
+    // Apply additional sorting by ranking score
+    const rankedProfiles = sortProfilesByRanking(profiles)
+
+    console.log(`Fetched ${rankedProfiles.length} profiles for discovery`)
 
     return NextResponse.json({
       profiles: rankedProfiles,

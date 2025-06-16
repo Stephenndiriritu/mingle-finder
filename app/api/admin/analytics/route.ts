@@ -138,13 +138,13 @@ export async function GET(req: NextRequest) {
     `
 
     // Execute queries with error handling based on available schema
-    let userStats = { rows: [{ total_users: 0 }] }
-    let subscriptions = { rows: [] }
-    let dailyActivity = { rows: [] }
-    let matchStats = { rows: [{ total_matches: 0 }] }
-    let messageStats = { rows: [{ total_messages: 0 }] }
-    let topLocations = { rows: [] }
-    let ageDistribution = { rows: [] }
+    let userStats: any = { rows: [{ total_users: 0 }] }
+    let subscriptions: any = { rows: [] }
+    let dailyActivity: any = { rows: [] }
+    let matchStats: any = { rows: [{ total_matches: 0 }] }
+    let messageStats: any = { rows: [{ total_messages: 0 }] }
+    let topLocations: any = { rows: [] }
+    let ageDistribution: any = { rows: [] }
 
     // Get basic user count
     if (availableTables.includes('users')) {
@@ -241,22 +241,22 @@ export async function GET(req: NextRequest) {
 
     const analytics = {
       // Basic statistics
-      totalUsers: parseInt(userStats.rows[0]?.total_users || '0'),
-      activeUsers: parseInt(userStats.rows[0]?.active_users_24h || '0'),
-      activeUsers7d: parseInt(userStats.rows[0]?.active_users_7d || '0'),
-      premiumUsers: parseInt(userStats.rows[0]?.premium_users || '0'),
-      verifiedUsers: parseInt(userStats.rows[0]?.verified_users || '0'),
-      newUsers30d: parseInt(userStats.rows[0]?.new_users_30d || '0'),
+      totalUsers: parseInt(String(userStats.rows[0]?.total_users || '0')),
+      activeUsers: parseInt(String(userStats.rows[0]?.active_users_24h || '0')),
+      activeUsers7d: parseInt(String(userStats.rows[0]?.active_users_7d || '0')),
+      premiumUsers: parseInt(String(userStats.rows[0]?.premium_users || '0')),
+      verifiedUsers: parseInt(String(userStats.rows[0]?.verified_users || '0')),
+      newUsers30d: parseInt(String(userStats.rows[0]?.new_users_30d || '0')),
 
       // Match statistics
-      totalMatches: parseInt(matchStats.rows[0]?.total_matches || '0'),
-      matches24h: parseInt(matchStats.rows[0]?.matches_24h || '0'),
-      matches7d: parseInt(matchStats.rows[0]?.matches_7d || '0'),
+      totalMatches: parseInt(String(matchStats.rows[0]?.total_matches || '0')),
+      matches24h: parseInt(String(matchStats.rows[0]?.matches_24h || '0')),
+      matches7d: parseInt(String(matchStats.rows[0]?.matches_7d || '0')),
 
       // Message statistics
-      totalMessages: parseInt(messageStats.rows[0]?.total_messages || '0'),
-      messages24h: parseInt(messageStats.rows[0]?.messages_24h || '0'),
-      messages7d: parseInt(messageStats.rows[0]?.messages_7d || '0'),
+      totalMessages: parseInt(String(messageStats.rows[0]?.total_messages || '0')),
+      messages24h: parseInt(String(messageStats.rows[0]?.messages_24h || '0')),
+      messages7d: parseInt(String(messageStats.rows[0]?.messages_7d || '0')),
 
       // Detailed breakdowns
       subscriptions: subscriptions.rows || [],

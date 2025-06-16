@@ -1,10 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ testimonialId: string }> }) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
+
     const { testimonialId } = await params
 
     if (!testimonialId || testimonialId.trim() === '') {
@@ -129,15 +134,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           `INSERT INTO user_activities (user_id, activity_type, activity_data)
            VALUES ($1, $2, $3)`,
           [
-            "e3529410-cb84-4113-931f-907a1e90bc3b", // TODO: Use actual admin ID
+            admin.id,
             "admin_testimonial_action",
             JSON.stringify({
               testimonial_id: testimonialId,
               action: is_approved === true ? "approve" : is_approved === false ? "unapprove" : "update",
               is_approved,
               is_featured,
-              admin_id: "e3529410-cb84-4113-931f-907a1e90bc3b",
-              admin_email: "admin@minglefinder.com",
+              admin_id: admin.id,
+              admin_email: admin.email,
             }),
           ],
         )
@@ -145,8 +150,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Use only available columns
         let activityColumns = 'user_id, activity_type'
         let activityValues = '$1, $2'
-        // Use a valid UUID for admin user (you can replace this with actual admin UUID)
-        let activityParams = ["e3529410-cb84-4113-931f-907a1e90bc3b", "admin_testimonial_action"]
+        // Use actual admin ID
+        let activityParams = [admin.id, "admin_testimonial_action"]
 
         await pool.query(
           `INSERT INTO user_activities (${activityColumns}) VALUES (${activityValues})`,
@@ -165,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     })
   } catch (error) {
     console.error("Admin update testimonial error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

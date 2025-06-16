@@ -1,35 +1,41 @@
-import nodemailer from "nodemailer"
+// EmailJS implementation for sending emails
+import {
+  sendEmail as sendEmailJS,
+  sendVerificationEmail as sendVerificationEmailJS,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendMatchNotificationEmail,
+  sendMessageNotificationEmail,
+  isEmailJSConfigured
+} from './emailjs'
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-})
-
-export async function sendEmail(to: string, subject: string, html: string) {
+// Main email function - uses EmailJS
+export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   try {
-    if (!process.env.SMTP_HOST) {
-      console.log("Email not configured, would send:", { to, subject })
+    if (!isEmailJSConfigured()) {
+      console.warn('EmailJS not configured. Email would be sent to:', to, 'Subject:', subject)
       return
     }
 
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to,
-      subject,
-      html,
-    })
-
-    console.log(`Email sent to ${to}: ${subject}`)
+    await sendEmailJS(to, subject, html)
+    console.log('Email sent successfully via EmailJS to:', to)
   } catch (error) {
-    console.error("Failed to send email:", error)
+    console.error('Failed to send email via EmailJS:', error)
+    throw new Error('Failed to send email')
   }
 }
 
+// Export specific email functions for convenience
+export {
+  sendVerificationEmailJS as sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendMatchNotificationEmail,
+  sendMessageNotificationEmail,
+  isEmailJSConfigured
+}
+
+// Backward compatibility template functions
 export function getWelcomeEmailTemplate(name: string) {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -53,21 +59,10 @@ export function getMatchNotificationTemplate(matchName: string) {
       <h1 style="color: #ec4899;">🎉 You have a new match!</h1>
       <p>Great news! You and ${matchName} liked each other.</p>
       <p>Start a conversation and see where it leads!</p>
-      <a href="${process.env.NEXT_PUBLIC_APP_URL}/app/matches" 
+      <a href="${process.env.NEXT_PUBLIC_APP_URL}/app/matches"
          style="background: #ec4899; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
         View Match
       </a>
     </div>
   `
-}
-
-export async function sendVerificationEmail(email: string, token: string) {
-  const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`
-  
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || 'noreply@minglefinder.com',
-    to: email,
-    subject: 'Verify your email address',
-    html: `Click <a href="${verificationUrl}">here</a> to verify your email address.`
-  })
 }

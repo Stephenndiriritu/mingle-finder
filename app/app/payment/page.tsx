@@ -236,23 +236,45 @@ export default function PaymentPage() {
                   Current Plan
                 </Button>
               ) : (
-                <div className="space-y-2">
-                  <PayPalButton
-                    planId={plan.id}
-                    amount={plan.price.toString()}
-                    onSuccess={() => {
-                      toast.success('Payment successful!')
-                      // Refresh user data or redirect
-                      window.location.reload()
-                    }}
-                    onError={(error) => {
-                      console.error('Payment error:', error)
-                      toast.error('Payment failed. Please try again.')
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 text-center">
-                    Secure payment via PayPal
-                  </p>
+                <div className="space-y-3">
+                  {/* PayPal Payment Option */}
+                  <div className="space-y-2">
+                    <PayPalButton
+                      planId={plan.id}
+                      amount={plan.price.toString()}
+                      onSuccess={() => {
+                        toast.success('Payment successful!')
+                        window.location.reload()
+                      }}
+                      onError={(error) => {
+                        console.error('Payment error:', error)
+                        toast.error('Payment failed. Please try again.')
+                      }}
+                    />
+                    <p className="text-xs text-gray-500 text-center">
+                      International payments via PayPal
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center">
+                    <div className="flex-1 border-t border-gray-200"></div>
+                    <span className="px-3 text-xs text-gray-500 bg-white">OR</span>
+                    <div className="flex-1 border-t border-gray-200"></div>
+                  </div>
+
+                  {/* Pesapal Payment Option */}
+                  <div className="space-y-2">
+                    <Button
+                      className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
+                      onClick={() => toast.info('Pesapal integration coming soon!')}
+                    >
+                      Pay with Pesapal (Coming Soon)
+                    </Button>
+                    <p className="text-xs text-gray-500 text-center">
+                      Local payments via Mobile Money & Cards
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -289,7 +311,11 @@ export default function PaymentPage() {
 
       <div className="mt-8 text-center text-sm text-gray-500">
         <p>All subscriptions auto-renew. Cancel anytime in your account settings.</p>
-        <p>Secure payments powered by PayPal. Your data is protected.</p>
+        <p>Secure payments powered by PayPal & Pesapal. Your data is protected.</p>
+        <p className="mt-2">
+          <span className="font-medium">PayPal:</span> International cards & PayPal balance •
+          <span className="font-medium"> Pesapal:</span> M-Pesa, Airtel Money, Bank transfers & Local cards
+        </p>
       </div>
     </div>
   )

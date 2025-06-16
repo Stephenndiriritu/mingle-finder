@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 
 interface RouteParams {
   params: Promise<{
@@ -9,8 +10,12 @@ interface RouteParams {
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    // TODO: Add proper admin authentication check
-    // const admin = await requireAdmin(request)
+    // Check admin authentication
+    const admin = await getUserFromRequest(request)
+    if (!admin || !admin.isAdmin) {
+      return NextResponse.json({ error: "Admin access required" }, { status: 401 })
+    }
+
     const { reportId: reportIdParam } = await params
     const reportId = Number.parseInt(reportIdParam)
 
@@ -112,7 +117,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     console.error("Admin update report error:", error)
-    if (error.message === "Authentication required" || error.message === "Admin access required") {
+    if (error instanceof Error && (error.message === "Authentication required" || error.message === "Admin access required")) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

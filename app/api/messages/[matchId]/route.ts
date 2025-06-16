@@ -1,119 +1,91 @@
 import { NextRequest, NextResponse } from "next/server"
-
-// Mock chat data for individual conversations
-const mockChatData = {
-  "1": {
-    recipientId: 2,
-    recipientName: "Sarah Johnson",
-    recipientPhoto: "/placeholder.svg?height=400&width=400",
-    isOnline: true,
-    lastActive: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    messages: [
-      {
-        id: 1,
-        message: "Hey! How are you?",
-        sender_id: 2,
-        receiver_id: 1,
-        sender_name: "Sarah Johnson",
-        created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-        is_read: true
-      },
-      {
-        id: 2,
-        message: "Hi Sarah! I'm doing great, thanks for asking. How about you?",
-        sender_id: 1,
-        receiver_id: 2,
-        sender_name: "Test User",
-        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        is_read: true
-      },
-      {
-        id: 3,
-        message: "I'm good too! I saw you like hiking. Do you have any favorite trails?",
-        sender_id: 2,
-        receiver_id: 1,
-        sender_name: "Sarah Johnson",
-        created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        is_read: true
-      }
-    ]
-  },
-  "2": {
-    recipientId: 3,
-    recipientName: "Michael Chen",
-    recipientPhoto: "/placeholder.svg?height=400&width=400",
-    isOnline: false,
-    lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    messages: [
-      {
-        id: 4,
-        message: "Would you like to grab coffee sometime?",
-        sender_id: 3,
-        receiver_id: 1,
-        sender_name: "Michael Chen",
-        created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        is_read: true
-      },
-      {
-        id: 5,
-        message: "That sounds great! I know a nice place downtown.",
-        sender_id: 1,
-        receiver_id: 3,
-        sender_name: "Test User",
-        created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        is_read: true
-      }
-    ]
-  },
-  "3": {
-    recipientId: 4,
-    recipientName: "Emily Davis",
-    recipientPhoto: "/placeholder.svg?height=400&width=400",
-    isOnline: true,
-    lastActive: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    messages: []
-  }
-}
-
+import pool from "@/lib/db"
+import { getUserFromRequest } from "@/lib/auth"
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ matchId: string }> }
 ) {
   try {
+    const user = await getUserFromRequest(request)
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { matchId } = await params
 
-    // Return mock chat data
-    let chatData = mockChatData[matchId as keyof typeof mockChatData]
+    // Get match and other user information
+    const matchQuery = `
+      SELECT
+        m.id,
+        m.created_at as matched_at,
+        CASE
+          WHEN m.user1_id = $1 THEN m.user2_id
+          ELSE m.user1_id
+        END as other_user_id,
+        u.name,
+        u.last_active,
+        p.profile_picture_url,
+        p.first_name,
+        p.last_name
+      FROM matches m
+      JOIN users u ON (
+        CASE
+          WHEN m.user1_id = $1 THEN m.user2_id
+          ELSE m.user1_id
+        END = u.id
+      )
+      LEFT JOIN profiles p ON u.id = p.user_id
+      WHERE m.id = $2 AND (m.user1_id = $1 OR m.user2_id = $1)
+    `
 
-    // If no existing chat data, create new chat for new matches
-    if (!chatData) {
-      // Check if this is a new match from discover page
-      if (matchId.startsWith('match_')) {
-        // Extract user ID from match ID (format: match_timestamp_userId)
-        const parts = matchId.split('_')
-        const userId = parts[parts.length - 1]
+    const matchResult = await pool.query(matchQuery, [user.id, matchId])
 
-        // Create new chat data for the new match
-        // In a real app, you'd fetch the user's actual data from the database
-        const userNames = {
-          '1': 'Alex Johnson',
-          '2': 'Sarah Wilson',
-          '3': 'Mike Chen',
-          '4': 'Emma Davis',
-          '5': 'Chris Taylor'
-        }
+    if (matchResult.rows.length === 0) {
+      return NextResponse.json({ error: "Match not found or access denied" }, { status: 404 })
+    }
 
-        chatData = {
-          recipientId: parseInt(userId) || 5,
-          recipientName: userNames[userId as keyof typeof userNames] || "New Match",
-          recipientPhoto: "/placeholder.svg?height=400&width=400",
-          isOnline: true,
-          lastActive: new Date().toISOString(),
-          messages: []
-        }
-      } else {
-        return NextResponse.json({ error: "Chat not found" }, { status: 404 })
-      }
+    const match = matchResult.rows[0]
+
+    // Get messages for this match
+    const messagesQuery = `
+      SELECT
+        m.id,
+        m.content as message,
+        m.sender_id,
+        m.created_at,
+        m.is_read,
+        u.name as sender_name,
+        p.first_name,
+        p.last_name
+      FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      LEFT JOIN profiles p ON u.id = p.user_id
+      WHERE m.match_id = $1
+      ORDER BY m.created_at ASC
+    `
+
+    const messagesResult = await pool.query(messagesQuery, [matchId])
+
+    const messages = messagesResult.rows.map(row => ({
+      id: row.id,
+      message: row.message,
+      sender_id: row.sender_id,
+      sender_name: row.first_name ? `${row.first_name} ${row.last_name || ''}`.trim() : row.sender_name,
+      created_at: row.created_at,
+      is_read: row.is_read
+    }))
+
+    // Check if other user is online (active within last 15 minutes)
+    const isOnline = match.last_active && new Date(match.last_active) > new Date(Date.now() - 15 * 60 * 1000)
+
+    const chatData = {
+      recipientId: match.other_user_id,
+      recipientName: match.first_name ? `${match.first_name} ${match.last_name || ''}`.trim() : match.name,
+      recipientPhoto: match.profile_picture_url || "/placeholder.svg?height=400&width=400",
+      isOnline,
+      lastActive: match.last_active,
+      messages
     }
 
     return NextResponse.json(chatData)

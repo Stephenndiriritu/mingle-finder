@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSocket } from '@/hooks/useSocket'
+import { useAuth } from '@/components/auth-provider'
 import { formatDistanceToNow } from 'date-fns'
 import { Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -17,13 +18,14 @@ interface Message {
 }
 
 interface ChatWindowProps {
-  chatId: string
+  chatId: string // This can be either matchId or conversationId
   recipientId: number
   recipientName: string
   recipientPhoto: string
   messages: Message[]
   isOnline: boolean
   lastActive: string
+  isConversation?: boolean // true for direct conversations, false for match-based chats
 }
 
 export function ChatWindow({
@@ -34,12 +36,14 @@ export function ChatWindow({
   messages: initialMessages,
   isOnline,
   lastActive,
+  isConversation = false,
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [newMessage, setNewMessage] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { isConnected } = useSocket()
+  const { user } = useAuth()
 
   // Mock socket for demo
   const socket = {
@@ -74,18 +78,23 @@ export function ChatWindow({
     if (!newMessage.trim()) return
 
     try {
-      // Send message via API
-      const response = await fetch('/api/messages', {
+      // Send message via API - use different endpoints for conversations vs matches
+      const apiUrl = isConversation ? `/api/conversations/${chatId}` : '/api/messages'
+      const requestBody = isConversation
+        ? { message: newMessage }
+        : {
+            match_id: chatId,
+            receiver_id: recipientId,
+            message: newMessage,
+            user_id: user?.id
+          }
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          match_id: chatId,
-          receiver_id: recipientId,
-          message: newMessage,
-          user_id: 1 // Current user ID (in real app, get from auth context)
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const data = await response.json()

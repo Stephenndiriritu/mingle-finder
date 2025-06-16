@@ -24,16 +24,16 @@ export async function POST(request: NextRequest) {
 
     // Send reset email
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`
-    await sendEmail({
-      to: email,
-      subject: "Reset your password",
-      html: `
+    await sendEmail(
+      email,
+      "Reset your password",
+      `
         <h1>Reset your password</h1>
         <p>Click the link below to reset your password:</p>
         <a href="${resetUrl}">${resetUrl}</a>
         <p>This link will expire in 1 hour.</p>
       `
-    })
+    )
 
     return NextResponse.json({ message: "Password reset email sent" })
   } catch (error) {

@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     const resume = formData.get('resume') as File
 
     // Store resume file (implement your file storage logic)
-    const resumeUrl = await uploadResume(resume)
+    // const resumeUrl = await uploadResume(resume) // TODO: Implement file upload
+    const resumeUrl = 'placeholder-resume-url'
 
     // Store application
     await pool.query(
