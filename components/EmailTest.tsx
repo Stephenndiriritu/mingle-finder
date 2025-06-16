@@ -120,8 +120,6 @@ export function EmailTest() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <p className="text-yellow-800 text-sm">
               ⚠️ EmailJS is not configured. Please set up your environment variables first.
-              <br />
-              See <code>EMAILJS_SETUP_GUIDE.md</code> for instructions.
             </p>
           </div>
         )}

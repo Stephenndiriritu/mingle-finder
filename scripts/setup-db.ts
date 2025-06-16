@@ -8,7 +8,7 @@ async function setupDatabase() {
     host: 'localhost',
     port: 5432,
     database: 'postgres'
-  })
+  } as any)
 
   try {
     // Drop database if exists

@@ -1,96 +1,146 @@
-import { NextRequest, NextResponse } from "next/server"
-import { Redis } from "@upstash/redis"
+import { NextRequest, NextResponse } from 'next/server'
 
-// Initialize Redis client if REDIS_URL is available
-const redis = process.env.REDIS_URL 
-  ? new Redis({ url: process.env.REDIS_URL })
-  : null
-
-// In-memory store for development or when Redis is not available
-const inMemoryStore: Record<string, { count: number, reset: number }> = {}
-
-interface RateLimitOptions {
-  limit: number
-  window: number // in seconds
-  identifier?: string
+interface RateLimitEntry {
+  count: number
+  resetTime: number
 }
 
-export async function rateLimit(
-  request: NextRequest,
-  options: RateLimitOptions
-) {
-  const { limit, window } = options
-  
-  // Get client IP or custom identifier
-  const identifier = options.identifier || 
-    request.ip || 
-    request.headers.get("x-forwarded-for") || 
-    "anonymous"
+class RateLimiter {
+  private requests = new Map<string, RateLimitEntry>()
+  private cleanupInterval: NodeJS.Timeout
+
+  constructor() {
+    // Clean up expired entries every minute
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup()
+    }, 60 * 1000)
+  }
+
+  isAllowed(
+    identifier: string, 
+    maxRequests: number = 100, 
+    windowMs: number = 15 * 60 * 1000 // 15 minutes
+  ): { allowed: boolean; remaining: number; resetTime: number } {
+    const now = Date.now()
+    const resetTime = now + windowMs
     
-  const key = `ratelimit:${identifier}:${request.nextUrl.pathname}`
-  const now = Date.now()
-  const windowMs = window * 1000
-  const reset = now + windowMs
-  
-  let currentLimit: { count: number, reset: number }
-  
-  // Use Redis if available
-  if (redis) {
-    const result = await redis.get(key) as { count: number, reset: number } | null
+    const entry = this.requests.get(identifier)
     
-    if (result) {
-      currentLimit = result
-    } else {
-      currentLimit = { count: 0, reset }
-      await redis.set(key, currentLimit, { ex: window })
+    if (!entry || now > entry.resetTime) {
+      // First request or window expired
+      this.requests.set(identifier, { count: 1, resetTime })
+      return { allowed: true, remaining: maxRequests - 1, resetTime }
+    }
+    
+    if (entry.count >= maxRequests) {
+      // Rate limit exceeded
+      return { allowed: false, remaining: 0, resetTime: entry.resetTime }
     }
     
     // Increment count
-    currentLimit.count += 1
-    await redis.set(key, currentLimit, { ex: window })
-  } 
-  // Use in-memory store
-  else {
-    if (inMemoryStore[key] && inMemoryStore[key].reset > now) {
-      currentLimit = inMemoryStore[key]
-      currentLimit.count += 1
-    } else {
-      currentLimit = { count: 1, reset }
+    entry.count++
+    this.requests.set(identifier, entry)
+    
+    return { 
+      allowed: true, 
+      remaining: maxRequests - entry.count, 
+      resetTime: entry.resetTime 
     }
-    
-    inMemoryStore[key] = currentLimit
-    
-    // Clean up expired entries occasionally
-    if (Math.random() < 0.01) {
-      for (const key in inMemoryStore) {
-        if (inMemoryStore[key].reset <= now) {
-          delete inMemoryStore[key]
-        }
+  }
+
+  private cleanup(): void {
+    const now = Date.now()
+    for (const [key, entry] of this.requests.entries()) {
+      if (now > entry.resetTime) {
+        this.requests.delete(key)
       }
     }
   }
-  
-  // Set rate limit headers
-  const headers = {
-    "X-RateLimit-Limit": limit.toString(),
-    "X-RateLimit-Remaining": Math.max(0, limit - currentLimit.count).toString(),
-    "X-RateLimit-Reset": new Date(currentLimit.reset).toISOString()
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval)
+    this.requests.clear()
   }
-  
-  // If limit is exceeded, return 429 Too Many Requests
-  if (currentLimit.count > limit) {
-    return NextResponse.json(
-      { error: "Too many requests, please try again later." },
-      { 
-        status: 429, 
-        headers: {
-          ...headers,
-          "Retry-After": Math.ceil((currentLimit.reset - now) / 1000).toString()
-        }
+}
+
+// Global rate limiter instance
+const rateLimiter = new RateLimiter()
+
+// Rate limiting middleware
+export async function rateLimit(
+  request: NextRequest,
+  options: {
+    maxRequests?: number
+    windowMs?: number
+    keyGenerator?: (req: NextRequest) => string
+  } = {}
+): Promise<NextResponse | null> {
+  const {
+    maxRequests = 100,
+    windowMs = 15 * 60 * 1000, // 15 minutes
+    keyGenerator = (req) => req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'anonymous'
+  } = options
+
+  const identifier = keyGenerator(request)
+  const result = rateLimiter.isAllowed(identifier, maxRequests, windowMs)
+
+  if (!result.allowed) {
+    return new NextResponse('Too Many Requests', {
+      status: 429,
+      headers: {
+        'Retry-After': Math.ceil((result.resetTime - Date.now()) / 1000).toString(),
+        'X-RateLimit-Limit': maxRequests.toString(),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': result.resetTime.toString()
       }
-    )
+    })
   }
-  
-  // Otherwise, return null to continue processing the request
-  return null
-} 
+
+  // Add rate limit headers to successful responses
+  const response = NextResponse.next()
+  response.headers.set('X-RateLimit-Limit', maxRequests.toString())
+  response.headers.set('X-RateLimit-Remaining', result.remaining.toString())
+  response.headers.set('X-RateLimit-Reset', result.resetTime.toString())
+
+  return null // Allow request to continue
+}
+
+// Specific rate limiters for different endpoints
+export const authRateLimit = (request: NextRequest) =>
+  rateLimit(request, {
+    maxRequests: 5,
+    windowMs: 60 * 1000, // 1 minute
+    keyGenerator: (req) => `auth:${req.headers.get('x-forwarded-for') || 'anonymous'}`
+  })
+
+export const apiRateLimit = (request: NextRequest) =>
+  rateLimit(request, {
+    maxRequests: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    keyGenerator: (req) => `api:${req.headers.get('x-forwarded-for') || 'anonymous'}`
+  })
+
+export const swipeRateLimit = (request: NextRequest) =>
+  rateLimit(request, {
+    maxRequests: 100,
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    keyGenerator: (req) => `swipe:${req.headers.get('x-forwarded-for') || 'anonymous'}`
+  })
+
+export const messageRateLimit = (request: NextRequest) =>
+  rateLimit(request, {
+    maxRequests: 50,
+    windowMs: 60 * 1000, // 1 minute
+    keyGenerator: (req) => `message:${req.headers.get('x-forwarded-for') || 'anonymous'}`
+  })
+
+// Helper function to check rate limit without middleware
+export function checkRateLimit(
+  identifier: string,
+  maxRequests: number = 100,
+  windowMs: number = 15 * 60 * 1000
+): { allowed: boolean; remaining: number; resetTime: number } {
+  return rateLimiter.isAllowed(identifier, maxRequests, windowMs)
+}
+
+export default rateLimiter

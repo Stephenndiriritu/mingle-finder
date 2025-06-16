@@ -76,12 +76,12 @@ export async function getAuthToken(): Promise<string | undefined> {
 }
 
 export async function validateSession(): Promise<User | null> {
-  const token = getAuthToken()
+  const token = await getAuthToken()
   if (!token) return null
 
   const payload = verifyToken(token)
   if (!payload) {
-    clearAuthCookie()
+    await clearAuthCookie()
     return null
   }
 

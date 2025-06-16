@@ -1,158 +1,165 @@
-import { Redis } from '@upstash/redis'
-import { Profile } from '@/types/profile'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-
-const redis = new Redis({
-  url: process.env.REDIS_URL!,
-  token: process.env.REDIS_TOKEN!,
-})
-
-const CACHE_TTL = {
-  PROFILE: 3600, // 1 hour
-  MATCHES: 300, // 5 minutes
-  DISCOVER: 60, // 1 minute
-  USER_PREFERENCES: 3600, // 1 hour
+// Simple in-memory cache implementation (fallback when Redis not available)
+interface CacheItem {
+  value: any
+  expiry: number
 }
 
-interface CacheConfig {
-  ttl: number // Time to live in seconds
-  tags?: string[] // Cache tags for invalidation
-}
+class MemoryCache {
+  private cache = new Map<string, CacheItem>()
+  private cleanupInterval: NodeJS.Timeout
 
-export class CacheManager {
-  static async get(key: string): Promise<any> {
-    try {
-      const cached = await redis.get(key)
-      return cached ? JSON.parse(cached as string) : null
-    } catch (error) {
-      console.error('Cache get error:', error)
+  constructor() {
+    // Clean up expired items every 5 minutes
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup()
+    }, 5 * 60 * 1000)
+  }
+
+  set(key: string, value: any, ttlSeconds: number = 300): void {
+    const expiry = Date.now() + (ttlSeconds * 1000)
+    this.cache.set(key, { value, expiry })
+  }
+
+  get<T>(key: string): T | null {
+    const item = this.cache.get(key)
+    if (!item) return null
+
+    if (Date.now() > item.expiry) {
+      this.cache.delete(key)
       return null
     }
+
+    return item.value as T
   }
 
-  static async set(key: string, value: any, config: CacheConfig): Promise<void> {
-    try {
-      await redis.set(key, JSON.stringify(value), {
-        ex: config.ttl,
-      })
+  delete(key: string): void {
+    this.cache.delete(key)
+  }
 
-      if (config.tags) {
-        await Promise.all(
-          config.tags.map(tag =>
-            redis.sadd(`cache:tags:${tag}`, key)
-          )
-        )
+  clear(): void {
+    this.cache.clear()
+  }
+
+  private cleanup(): void {
+    const now = Date.now()
+    for (const [key, item] of this.cache.entries()) {
+      if (now > item.expiry) {
+        this.cache.delete(key)
+      }
+    }
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval)
+    this.clear()
+  }
+}
+
+// Global cache instance
+const memoryCache = new MemoryCache()
+
+// Redis-compatible interface
+export const cacheUtils = {
+  async set(key: string, value: any, ttl: number = 300): Promise<void> {
+    try {
+      // Try Redis if available
+      if (process.env.REDIS_URL && typeof window === 'undefined') {
+        const { Redis } = await import('ioredis')
+        const redis = new Redis(process.env.REDIS_URL)
+        await redis.setex(key, ttl, JSON.stringify(value))
+        redis.disconnect()
+      } else {
+        // Fallback to memory cache
+        memoryCache.set(key, value, ttl)
       }
     } catch (error) {
-      console.error('Cache set error:', error)
+      console.warn('Cache set failed, using memory cache:', error)
+      memoryCache.set(key, value, ttl)
     }
-  }
+  },
 
-  static async invalidateByTags(tags: string[]): Promise<void> {
+  async get<T>(key: string): Promise<T | null> {
     try {
-      const keys = await Promise.all(
-        tags.map(tag => redis.smembers(`cache:tags:${tag}`))
-      )
-
-      const uniqueKeys = [...new Set(keys.flat())]
-      if (uniqueKeys.length > 0) {
-        await redis.del(uniqueKeys)
-        await Promise.all(
-          tags.map(tag => redis.del(`cache:tags:${tag}`))
-        )
+      // Try Redis if available
+      if (process.env.REDIS_URL && typeof window === 'undefined') {
+        const { Redis } = await import('ioredis')
+        const redis = new Redis(process.env.REDIS_URL)
+        const data = await redis.get(key)
+        redis.disconnect()
+        return data ? JSON.parse(data) : null
+      } else {
+        // Fallback to memory cache
+        return memoryCache.get<T>(key)
       }
     } catch (error) {
-      console.error('Cache invalidation error:', error)
+      console.warn('Cache get failed, using memory cache:', error)
+      return memoryCache.get<T>(key)
+    }
+  },
+
+  async del(key: string): Promise<void> {
+    try {
+      // Try Redis if available
+      if (process.env.REDIS_URL && typeof window === 'undefined') {
+        const { Redis } = await import('ioredis')
+        const redis = new Redis(process.env.REDIS_URL)
+        await redis.del(key)
+        redis.disconnect()
+      } else {
+        // Fallback to memory cache
+        memoryCache.delete(key)
+      }
+    } catch (error) {
+      console.warn('Cache delete failed, using memory cache:', error)
+      memoryCache.delete(key)
+    }
+  },
+
+  async invalidatePattern(pattern: string): Promise<void> {
+    try {
+      // Try Redis if available
+      if (process.env.REDIS_URL && typeof window === 'undefined') {
+        const { Redis } = await import('ioredis')
+        const redis = new Redis(process.env.REDIS_URL)
+        const keys = await redis.keys(pattern)
+        if (keys.length > 0) {
+          await redis.del(...keys)
+        }
+        redis.disconnect()
+      } else {
+        // For memory cache, clear all (simple implementation)
+        memoryCache.clear()
+      }
+    } catch (error) {
+      console.warn('Cache pattern invalidation failed:', error)
+      memoryCache.clear()
     }
   }
 }
 
-// Cache middleware decorator
-export function withCache(config: CacheConfig) {
-  return async function(
-    req: NextRequest,
-    handler: () => Promise<NextResponse>
-  ): Promise<NextResponse> {
-    if (req.method !== 'GET') {
-      return handler()
+// Cache decorator for API routes
+export function withCache(ttl: number = 300) {
+  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+    const method = descriptor.value
+
+    descriptor.value = async function (...args: any[]) {
+      const cacheKey = `${propertyName}:${JSON.stringify(args)}`
+      
+      // Try to get from cache
+      const cached = await cacheUtils.get(cacheKey)
+      if (cached) {
+        return cached
+      }
+
+      // Execute original method
+      const result = await method.apply(this, args)
+      
+      // Cache the result
+      await cacheUtils.set(cacheKey, result, ttl)
+      
+      return result
     }
-
-    const cacheKey = `api:${req.nextUrl.pathname}${req.nextUrl.search}`
-    const cached = await CacheManager.get(cacheKey)
-
-    if (cached) {
-      return new NextResponse(JSON.stringify(cached), {
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    const response = await handler()
-    const data = await response.json()
-
-    await CacheManager.set(cacheKey, data, config)
-
-    return new NextResponse(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json' },
-    })
   }
 }
 
-export async function cacheGet<T>(key: string): Promise<T | null> {
-  try {
-    const data = await redis.get(key)
-    return data ? JSON.parse(data) : null
-  } catch (error) {
-    console.error('Cache get error:', error)
-    return null
-  }
-}
-
-export async function cacheSet(key: string, value: any, ttl: number = 3600): Promise<void> {
-  try {
-    await redis.setex(key, ttl, JSON.stringify(value))
-  } catch (error) {
-    console.error('Cache set error:', error)
-  }
-}
-
-export async function cacheDelete(key: string): Promise<void> {
-  try {
-    await redis.del(key)
-  } catch (error) {
-    console.error('Cache delete error:', error)
-  }
-}
-
-export async function getCachedProfile(userId: number): Promise<Profile | null> {
-  return cacheGet<Profile>(`profile:${userId}`)
-}
-
-export async function setCachedProfile(userId: number, profile: Profile): Promise<void> {
-  await cacheSet(`profile:${userId}`, profile, CACHE_TTL.PROFILE)
-}
-
-export async function getCachedMatches(userId: number): Promise<any[]> {
-  return cacheGet<any[]>(`matches:${userId}`) || []
-}
-
-export async function setCachedMatches(userId: number, matches: any[]): Promise<void> {
-  await cacheSet(`matches:${userId}`, matches, CACHE_TTL.MATCHES)
-}
-
-export async function getCachedDiscoverUsers(userId: number): Promise<any[]> {
-  return cacheGet<any[]>(`discover:${userId}`) || []
-}
-
-export async function setCachedDiscoverUsers(userId: number, users: any[]): Promise<void> {
-  await cacheSet(`discover:${userId}`, users, CACHE_TTL.DISCOVER)
-}
-
-export async function invalidateUserCache(userId: number): Promise<void> {
-  const keys = [
-    `profile:${userId}`,
-    `matches:${userId}`,
-    `discover:${userId}`,
-  ]
-  await Promise.all(keys.map(key => cacheDelete(key)))
-} 
+export default memoryCache

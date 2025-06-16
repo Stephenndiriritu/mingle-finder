@@ -8,14 +8,14 @@ const config = {
   host: 'localhost',
   port: 5432,
   database: 'minglefinder'
-}
+} as any
 
 async function createDatabase() {
   // Connect to postgres database to create our app database
   const pool = new Pool({
     ...config,
     database: 'postgres'
-  })
+  } as any)
 
   try {
     await pool.query('CREATE DATABASE minglefinder')
@@ -33,7 +33,7 @@ async function createDatabase() {
 
 async function runMigrations() {
   // Connect to our app database
-  const pool = new Pool(config)
+  const pool = new Pool(config as any)
 
   try {
     // Create migrations table if it doesn't exist
