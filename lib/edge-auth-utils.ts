@@ -34,6 +34,7 @@ export async function validateEdgeSession(): Promise<User | null> {
     name: '', // We'll need to fetch this from the database if needed
     isAdmin: payload.isAdmin,
     subscriptionType: payload.subscriptionType,
-    isVerified: payload.isVerified
+    isVerified: payload.isVerified,
+    isActive: true
   }
 } 

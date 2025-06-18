@@ -8,8 +8,11 @@ const JWT_SECRET = process.env.NEXTAUTH_SECRET!
 const TOKEN_EXPIRY = '7d'
 
 interface JWTPayload extends JwtPayload {
-  userId: string
+  userId: number
   email: string
+  isAdmin: boolean
+  subscriptionType: string
+  isVerified: boolean
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -39,7 +42,7 @@ export function generateToken(user: Partial<User>): string {
     userId: user.id!,
     email: user.email!,
     isAdmin: user.isAdmin || false,
-    subscriptionType: user.subscriptionType,
+    subscriptionType: user.subscriptionType || 'free',
     isVerified: user.isVerified || false
   }
   
@@ -91,7 +94,8 @@ export async function validateSession(): Promise<User | null> {
     name: '', // We'll need to fetch this from the database if needed
     isAdmin: payload.isAdmin,
     subscriptionType: payload.subscriptionType,
-    isVerified: payload.isVerified
+    isVerified: payload.isVerified,
+    isActive: true
   }
 }
 

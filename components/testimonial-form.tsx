@@ -40,7 +40,7 @@ export function TestimonialForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": user.id,
+          "x-user-id": user.id.toString(),
         },
         body: JSON.stringify({
           title,

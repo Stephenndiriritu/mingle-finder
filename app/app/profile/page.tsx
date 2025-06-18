@@ -155,7 +155,7 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      {profile && <ProfileForm initialData={profile} userId={user.id} />}
+      {profile && <ProfileForm initialData={profile} userId={user.id.toString()} />}
     </div>
   )
 }

@@ -110,8 +110,8 @@ export default function ConversationPage() {
           <AlertTriangle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Conversation Blocked</h2>
           <p className="text-gray-600 mb-4">
-            {conversationData.blockedBy === user?.id 
-              ? 'You have blocked this user.' 
+            {conversationData.blockedBy === user?.id?.toString()
+              ? 'You have blocked this user.'
               : 'This user has blocked you.'}
           </p>
           <Button onClick={handleBack}>

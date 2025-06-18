@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Create Pesapal order
     const pesapalOrder = await createPesapalOrder(
       planId,
-      user.id,
+      user.id.toString(),
       user.email,
       userPhone,
       currency

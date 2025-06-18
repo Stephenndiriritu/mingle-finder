@@ -97,7 +97,7 @@ export function MessageUserButton({
   }
 
   // Don't show button for current user
-  if (userId === user?.id) {
+  if (parseInt(userId) === user?.id) {
     return null
   }
 

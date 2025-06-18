@@ -42,7 +42,7 @@ export async function POST(
     const targetUser = targetUserResult.rows[0]
 
     // Check if user is trying to message themselves
-    if (targetUserId === user.id) {
+    if (parseInt(targetUserId) === user.id) {
       return NextResponse.json({ error: "Cannot start conversation with yourself" }, { status: 400 })
     }
 
@@ -134,7 +134,7 @@ export async function GET(
     const { userId: targetUserId } = await params
 
     // Check if user is trying to check conversation with themselves
-    if (targetUserId === user.id) {
+    if (parseInt(targetUserId) === user.id) {
       return NextResponse.json({ error: "Cannot check conversation with yourself" }, { status: 400 })
     }
 
@@ -147,7 +147,7 @@ export async function GET(
        LEFT JOIN users u ON (CASE WHEN c.user1_id = $1 THEN c.user2_id ELSE c.user1_id END = u.id)
        LEFT JOIN profiles p ON u.id = p.user_id
        WHERE (c.user1_id = $1 AND c.user2_id = $2) OR (c.user1_id = $2 AND c.user2_id = $1)`,
-      [user.id, targetUserId]
+      [user.id, parseInt(targetUserId)]
     )
 
     if (conversationResult.rows.length === 0) {
