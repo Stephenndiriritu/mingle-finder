@@ -5,12 +5,19 @@ import { useRouter } from "next/navigation"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface User {
-  id: string
+  id: number
   email: string
   name: string
   isAdmin: boolean
-  subscriptionType?: string
-  isVerified?: boolean
+  subscriptionType: string
+  isVerified: boolean
+  isActive: boolean
+  birthdate?: string
+  gender?: string
+  location?: string
+  bio?: string
+  lastActive?: string
+  createdAt?: string
 }
 
 interface AuthContextType {
@@ -41,42 +48,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Failed to parse stored user:', error)
+    checkAuthStatus()
+  }, [])
+
+  const checkAuthStatus = async () => {
+    try {
+      // Check if user is authenticated via API
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include' // Include cookies
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.user) {
+          setUser(data.user)
+        } else {
+          setUser(null)
+          // Clear any stored user data
+          localStorage.removeItem('user')
+        }
+      } else {
+        setUser(null)
         localStorage.removeItem('user')
       }
+    } catch (error) {
+      console.error('Auth check failed:', error)
+      setUser(null)
+      localStorage.removeItem('user')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
-  }, [])
+  }
 
   const logout = async () => {
     try {
+      // Call logout API to clear server-side session
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      })
+
       localStorage.removeItem('user')
       setUser(null)
       router.push("/")
     } catch (error) {
       console.error("Logout failed:", error)
+      // Still clear local state even if API call fails
+      localStorage.removeItem('user')
+      setUser(null)
       router.push("/")
     }
   }
 
   const refreshUser = async () => {
-    // For now, just check localStorage
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Failed to parse stored user:', error)
-        localStorage.removeItem('user')
-        setUser(null)
-      }
-    }
+    // Refresh user data from database
+    await checkAuthStatus()
   }
 
   // Show loading state only during initial load

@@ -56,65 +56,42 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
 
     try {
       if (mode === "login") {
-        // Use mock authentication instead of database API
-        const mockUsers = {
-          'user@minglefinder.com': {
-            id: 'e3529410-cb84-4113-931f-907a1e90bc3b',
-            email: 'user@minglefinder.com',
-            name: 'Test User',
-            isAdmin: false,
-            subscriptionType: 'free',
-            isVerified: false,
-            password: 'user123'
+        // Call real login API
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          'premium@minglefinder.com': {
-            id: 'f4640521-dc95-5224-a42f-a18b2f91cd4c',
-            email: 'premium@minglefinder.com',
-            name: 'Premium User',
-            isAdmin: false,
-            subscriptionType: 'premium',
-            isVerified: true,
-            password: 'premium123'
-          },
-          'admin@minglefinder.com': {
-            id: 'a1751632-ed06-6335-b53f-b29c3g02de5d',
-            email: 'admin@minglefinder.com',
-            name: 'Admin User',
-            isAdmin: true,
-            subscriptionType: 'premium_plus',
-            isVerified: true,
-            password: 'admin123'
+          credentials: 'include',
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password
+          })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Login failed')
+        }
+
+        if (data.success && data.user) {
+          // Store user data in localStorage for quick access
+          localStorage.setItem('user', JSON.stringify(data.user))
+
+          // Refresh auth context to get latest data from database
+          await refreshUser()
+
+          // Redirect based on user role
+          if (data.user.isAdmin) {
+            router.push("/admin")
+          } else {
+            router.push("/app")
           }
-        }
-
-        const user = mockUsers[formData.email as keyof typeof mockUsers]
-
-        if (!user || user.password !== formData.password) {
-          throw new Error("Invalid email or password")
-        }
-
-        const userSession = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          isAdmin: user.isAdmin,
-          subscriptionType: user.subscriptionType,
-          isVerified: user.isVerified
-        }
-
-        // Store user data in localStorage
-        localStorage.setItem('user', JSON.stringify(userSession))
-
-        // Refresh auth context
-        await refreshUser()
-
-        // Redirect based on user role
-        if (user.isAdmin) {
-          router.push("/admin")
+          onClose()
         } else {
-          router.push("/app")
+          throw new Error('Login failed')
         }
-        onClose()
       } else {
         // Validate registration fields
         if (!formData.name || !formData.email || !formData.password) {
@@ -130,26 +107,43 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
           throw new Error("Please enter a valid email address")
         }
 
-        // Mock registration - in a real app, this would call the registration API
-        // For demo purposes, create a new user session
-        const newUser = {
-          id: `user-${Date.now()}`, // Generate a simple ID
-          email: formData.email,
-          name: formData.name,
-          isAdmin: false,
-          subscriptionType: 'free',
-          isVerified: false
+        // Call real registration API
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            name: formData.name
+          })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Registration failed')
         }
 
-        // Store user data in localStorage
-        localStorage.setItem('user', JSON.stringify(newUser))
+        if (data.success && data.user) {
+          // Store user data in localStorage for quick access
+          localStorage.setItem('user', JSON.stringify(data.user))
 
-        // Refresh auth context
-        await refreshUser()
+          // Refresh auth context to get latest data from database
+          await refreshUser()
 
-        // Redirect to app (new users are not admin)
-        router.push("/app")
-        onClose()
+          // Redirect based on user role
+          if (data.user.isAdmin) {
+            router.push("/admin")
+          } else {
+            router.push("/app")
+          }
+          onClose()
+        } else {
+          throw new Error('Registration failed')
+        }
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : "An unexpected error occurred")

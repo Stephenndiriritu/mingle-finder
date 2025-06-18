@@ -1,25 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import pool from "@/lib/db"
-import { hashPassword } from "@/lib/auth-utils"
+import { hashPassword, generateToken } from "@/lib/auth-utils"
 import crypto from "crypto"
-import { query } from "@/lib/db"
-// Removed NextAuth import
-import { cookies } from 'next/headers'
-import { sign } from 'jsonwebtoken'
-
-// Mock user for development
-const mockUser = {
-  id: 1,
-  email: "",
-  name: "",
-  is_admin: false,
-  subscription_type: "free",
-  is_verified: false
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, dateOfBirth, gender, location } = await request.json()
+    const {
+      email,
+      password,
+      name,
+      dateOfBirth,
+      gender,
+      location,
+      bio,
+      interests,
+      occupation,
+      education,
+      height,
+      lookingFor,
+      ageMin,
+      ageMax,
+      maxDistance
+    } = await request.json()
 
     // Validation
     if (!email || !password || !name) {
@@ -67,15 +69,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Create user with is_verified set to false initially
+      // Create user with all provided information
       const userResult = await client.query(
         `INSERT INTO users (
-          email, password_hash, name, birthdate, 
-          gender, location, is_verified, verification_token,
-          verification_token_expires, is_admin, is_active
-        ) VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, false, true) 
-        RETURNING id, email, name`,
-        [email, passwordHash, name, parsedDateOfBirth, gender || null, location || null, verificationToken, tokenExpiry]
+          email, password_hash, name, birthdate,
+          gender, location, bio, is_verified, verification_token,
+          verification_token_expires, is_admin, is_active, subscription_type,
+          created_at, updated_at, last_active
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, false, true, 'free', NOW(), NOW(), NOW())
+        RETURNING id, email, name, birthdate, gender, location, bio, is_verified, is_admin, subscription_type`,
+        [email, passwordHash, name, parsedDateOfBirth, gender || null, location || null, bio || null, verificationToken, tokenExpiry]
       )
 
       const user = userResult.rows[0]
@@ -92,59 +95,85 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Create profile
+      // Split name into first and last name
+      const nameParts = name.trim().split(' ')
+      const firstName = nameParts[0]
+      const lastName = nameParts.slice(1).join(' ') || ''
+
+      // Create comprehensive profile
       await client.query(
-        `INSERT INTO profiles (user_id, first_name, age, profile_completion_percentage)
-         VALUES ($1, $2, $3, $4)`,
-        [user.id, name, age, 20] // Set initial profile completion to 20%
+        `INSERT INTO profiles (
+          user_id, first_name, last_name, bio, age, gender, location,
+          interests, height, occupation, education, looking_for,
+          age_min, age_max, max_distance, show_me, birth_date,
+          profile_completion_percentage, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW())`,
+        [
+          user.id,
+          firstName,
+          lastName,
+          bio || null,
+          age,
+          gender || null,
+          location || null,
+          interests ? (Array.isArray(interests) ? interests : [interests]) : [],
+          height || null,
+          occupation || null,
+          education || null,
+          lookingFor || 'relationship',
+          ageMin || 18,
+          ageMax || 99,
+          maxDistance || 50,
+          'everyone',
+          parsedDateOfBirth,
+          bio ? 60 : 30 // Higher completion if bio provided
+        ]
       )
 
-      // Create preferences
+      // Create user preferences with provided settings
       await client.query(
-        "INSERT INTO user_preferences (user_id) VALUES ($1)",
+        `INSERT INTO user_preferences (
+          user_id, created_at, updated_at
+        ) VALUES ($1, NOW(), NOW())`,
         [user.id]
       )
 
       await client.query('COMMIT')
 
-      // Generate JWT token for automatic login
-      const token = sign(
-        {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          isAdmin: false,
-          isVerified: false,
-          isActive: true
-        },
-        process.env.NEXTAUTH_SECRET || 'fallback-secret',
-        { expiresIn: '7d' }
-      )
+      // Generate JWT token for automatic login using proper auth utils
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        isAdmin: user.is_admin,
+        subscriptionType: user.subscription_type,
+        isVerified: user.is_verified
+      }
 
-      // Create response with session data
+      const token = generateToken(tokenPayload)
+
+      // Create response with complete user data from database
       const response = NextResponse.json({
+        success: true,
         message: "Registration successful. Please verify your email.",
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
-          isVerified: false,
-          isAdmin: false,
+          birthdate: user.birthdate,
+          gender: user.gender,
+          location: user.location,
+          bio: user.bio,
+          isVerified: user.is_verified,
+          isAdmin: user.is_admin,
+          subscriptionType: user.subscription_type,
           isActive: true
         },
-        verificationToken, // Include this for testing purposes
-        session: {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name
-          },
-          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        }
+        token: token,
+        verificationToken // Include this for testing purposes
       })
 
-      // Set the session cookie
-      response.cookies.set('next-auth.session-token', token, {
+      // Set the auth cookie with proper name
+      response.cookies.set('auth-token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

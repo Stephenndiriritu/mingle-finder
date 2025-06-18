@@ -8,17 +8,27 @@ if (!process.env.JWT_SECRET) {
 }
 
 export interface User {
-  id: string
+  id: number
   email: string
   name: string
   isAdmin: boolean
-  subscriptionType?: string
-  isVerified?: boolean
+  subscriptionType: string
+  isVerified: boolean
+  isActive: boolean
+  birthdate?: string
+  gender?: string
+  location?: string
+  bio?: string
+  lastActive?: string
+  createdAt?: string
 }
 
 interface JWTPayload {
-  userId: string
+  userId: number
   email: string
+  isAdmin: boolean
+  subscriptionType: string
+  isVerified: boolean
   iat?: number
   exp?: number
 }
@@ -41,9 +51,13 @@ export async function getUserFromRequest(request: NextRequest): Promise<User | n
       return null
     }
 
-    // Get user from database
+    // Get complete user data from database
     const result = await pool.query(
-      'SELECT id, email, name, is_admin, subscription_type, is_verified FROM users WHERE id = $1 AND is_active = true',
+      `SELECT
+        id, email, name, is_admin, subscription_type, is_verified, is_active,
+        birthdate, gender, location, bio, last_active, created_at
+       FROM users
+       WHERE id = $1 AND is_active = true`,
       [decoded.userId]
     )
 
@@ -52,13 +66,27 @@ export async function getUserFromRequest(request: NextRequest): Promise<User | n
     }
 
     const user = result.rows[0]
+
+    // Update last active timestamp
+    await pool.query(
+      'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = $1',
+      [user.id]
+    )
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       isAdmin: user.is_admin || false,
-      subscriptionType: user.subscription_type,
-      isVerified: user.is_verified
+      subscriptionType: user.subscription_type || 'free',
+      isVerified: user.is_verified || false,
+      isActive: user.is_active || false,
+      birthdate: user.birthdate,
+      gender: user.gender,
+      location: user.location,
+      bio: user.bio,
+      lastActive: user.last_active,
+      createdAt: user.created_at
     }
   } catch (error) {
     console.error('Error getting user from request:', error)
